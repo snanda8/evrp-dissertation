@@ -137,42 +137,92 @@ def validate_route(routes, nodes):
 def fitness_function(routes, cost_matrix, E_max, charging_stations, recharge_amount, penalty_weights):
     total_distance = 0
     total_penalty = 0
+    route_fitness_scores = []  # Store individual route scores
 
-
-    customers = set(nodes) - {0}
+    customers = set(nodes) - {0}  # Exclude depot
     visited_customers = set()
 
+    print("\n=== FITNESS FUNCTION DEBUG OUTPUT ===")
+    for idx, route in enumerate(routes):
+        print(f"Processing Route {idx + 1}: {route}")
 
-    for route in routes:
-        for i in range(len(route) -1):
+        # Calculate route distance
+        route_distance = 0
+        route_penalty = 0  # Track penalty for this route
+        for i in range(len(route) - 1):
             from_node = route[i]
             to_node = route[i + 1]
             distance = cost_matrix.get((from_node, to_node), float('inf'))
             if distance == float('inf'):
-                total_penalty += penalty_weights['unreachable_node']
-            total_distance += distance
+                route_penalty += penalty_weights['unreachable_node']
+                print(f"  Penalty for unreachable node pair ({from_node}, {to_node}): {penalty_weights['unreachable_node']}")
+            else:
+                route_distance += distance
 
+        print(f"  Route Distance: {route_distance}")
+        total_distance += route_distance
+
+        # Update battery and check constraints
         battery, valid, recharged, unnecessary_recharges = update_battery(
             route, cost_matrix, E_max, charging_stations, recharge_amount
         )
 
+        # Penalty for battery depletion
         if not valid:
-            total_penalty += penalty_weights['battery_depletion']
+            route_penalty += penalty_weights['battery_depletion']
+            print(f"  Penalty for battery depletion on route {route}: {penalty_weights['battery_depletion']}")
 
-        total_penalty += penalty_weights['unnecessary_recharges'] * unnecessary_recharges
+        # Penalty for unnecessary recharges
+        if unnecessary_recharges > 0:
+            penalty = penalty_weights['unnecessary_recharges'] * unnecessary_recharges
+            route_penalty += penalty
+            print(f"  Penalty for unnecessary recharges ({unnecessary_recharges}): {penalty}")
 
+        print(f"  Charging Stations Visited: {recharged}")
 
+        # Update visited customers
         segment_customers = set(route) - {0}
         visited_customers.update(segment_customers)
 
+        # Compute **individual route fitness score**
+        route_fitness_score = route_distance + route_penalty
+        route_fitness_scores.append(route_fitness_score)
+        print(f"  Fitness Score for Route {idx + 1}: {route_fitness_score}")
 
+        print()
+
+    # Penalty for missing customers
     if visited_customers != customers:
         missing = customers - visited_customers
-        total_penalty += penalty_weights['missing_customers'] * len(missing)
+        penalty = penalty_weights['missing_customers'] * len(missing)
+        total_penalty += penalty
+        print(f"\nPenalty for missing customers {missing}: {penalty}")
+
+    # Final overall fitness score
+    total_fitness_score = total_distance + total_penalty
+    print(f"\nTotal Distance: {total_distance}")
+    print(f"Total Penalty: {total_penalty}")
+    print(f"Overall Fitness Score: {total_fitness_score}")
+
+    return route_fitness_scores, total_fitness_score
 
 
-    fitness_score = total_distance + total_penalty
-    return fitness_score
+
+def tournament_selection(routes, route_fitness_scores, num_parents, tournament_size=3):
+    """
+    Selects parents using Tournament Selection.
+    A subset of routes is randomly chosen, and the best one is selected.
+    """
+    selected_routes = []
+    for _ in range(num_parents):
+        # Select random routes for the tournament
+        tournament_contestants = random.sample(list(zip(routes, route_fitness_scores)), tournament_size)
+
+        # Select the route with the best (lowest) fitness score
+        best_route = min(tournament_contestants, key=lambda x: x[1])[0]
+        selected_routes.append(best_route)
+
+    return selected_routes
 
 
 # Main Program Logic
@@ -181,6 +231,7 @@ recharge_amount = 30
 all_valid = True
 E_max = 50
 
+
 penalty_weights = {
     'missing_customers': 1e6,
     'battery_depletion': 1e5,
@@ -188,7 +239,7 @@ penalty_weights = {
     'unnecessary_recharges': 1000,
 }
 if validate_route(routes, nodes):
-    fitness_score = fitness_function(
+    route_fitness_scores, total_fitness_score = fitness_function(
         routes=routes,
         cost_matrix=cost_matrix,
         E_max=E_max,
@@ -196,7 +247,15 @@ if validate_route(routes, nodes):
         recharge_amount=recharge_amount,
         penalty_weights=penalty_weights
     )
-    print(f"Fitness Score: {fitness_score}")
+    print(f"\nTotal Population Fitness Score: {total_fitness_score}")
+
+    num_parents = len(routes) // 2
+
+    selected_parents = tournament_selection(routes, route_fitness_scores, num_parents, tournament_size=3)
+
+    print("\nSelected Routes using Tournament Selection:")
+    for idx, parent in enumerate(selected_parents, 1):
+        print(f"Parent {idx}: {parent}")
 else:
     # If routes are invalid, print detailed validation results
     print("Some routes are invalid.")
