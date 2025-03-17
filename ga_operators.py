@@ -1,3 +1,4 @@
+import random
 def update_battery(route, cost_matrix, E_max, charging_stations, recharge_amount, depot):
     battery = E_max
     recharged = 0
@@ -87,6 +88,9 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
         missing_penalty = penalty_weights['missing_customers'] * len(missing)
         total_penalty += missing_penalty
         print(f"  Missing customers {missing} -> penalty: {missing_penalty}")
+        vehicle_penalty = len(solution) * penalty_weights.get('vehicle_count', 1e4)
+        print(f"  Vehicle count penalty: {vehicle_penalty}")
+        total_penalty += vehicle_penalty
     total_fitness = total_distance + total_penalty
     print(f"\nTotal Distance: {total_distance}, Total Penalty: {total_penalty}, Overall Fitness: {total_fitness}")
     return total_fitness, (total_penalty == 0)

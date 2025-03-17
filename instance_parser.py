@@ -56,5 +56,9 @@ def parse_instance(file_path):
         service_time = float(req.find('service_time').text)
         requests[req_node] = {'quantity': quantity, 'service_time': service_time}
 
+    print(f"Customers Parsed: {customers}")
+    print(f"Charging Stations Parsed: {charging_stations}")
+    print(f"Depot: {depot}")
+
     return (nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
             battery_capacity, num_vehicles, vehicle_capacity, max_travel_time, requests)

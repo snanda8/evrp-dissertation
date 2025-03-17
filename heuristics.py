@@ -104,10 +104,12 @@ def insert_charging_stations_strategically(route, cost_matrix, E_max, charging_s
                 result_route.append(next_node)
             else:
                 return route  # If optimization fails, return original route.
-    return result_route
 
+
+    return result_route
+"""
 def remove_unnecessary_charging_stations(route, cost_matrix, E_max, charging_stations, depot):
-    """Remove charging stations that are not necessary for battery feasibility."""
+    Remove charging stations that are not necessary for battery feasibility.
     if not route or len(route) <= 2:
         return route
     cs_indices = [i for i, node in enumerate(route) if node in charging_stations and node != depot]
@@ -130,7 +132,7 @@ def remove_unnecessary_charging_stations(route, cost_matrix, E_max, charging_sta
         if feasible:
             route = test_route
     return route
-
+"""
 def heuristic_initial_solution(nodes, cost_matrix, travel_time_matrix, depot,
                                E_max, recharge_amount, charging_stations,
                                vehicle_capacity, max_travel_time, requests, num_vehicles):
@@ -143,7 +145,7 @@ def heuristic_initial_solution(nodes, cost_matrix, travel_time_matrix, depot,
     for cluster in clusters:
         route = nearest_neighbor_route(depot, cluster, nodes, cost_matrix, E_max, charging_stations, requests, vehicle_capacity)
         route = insert_charging_stations_strategically(route, cost_matrix, E_max, charging_stations, depot)
-        route = remove_unnecessary_charging_stations(route, cost_matrix, E_max, charging_stations, depot)
+        #route = remove_unnecessary_charging_stations(route, cost_matrix, E_max, charging_stations, depot)
         solution.append(route)
     # Assign any unvisited customers to the route with the lowest load.
     visited = set()
@@ -180,3 +182,167 @@ def heuristic_population_initialization(population_size, nodes, cost_matrix, tra
             random_routes.append(route)
         population.append(random_routes)
     return population
+
+def generate_giant_tour(depot, customers, nodes, cost_matrix):
+    """
+    Generate a giant tour (ordering) of all customers using a simple nearest neighbor heuristic.
+    Returns a list of customer nodes in the order they are visited.
+    """
+    unvisited = set(customers)
+    tour = []
+    current = depot
+    while unvisited:
+        next_customer = min(unvisited, key=lambda c: cost_matrix.get((current, c), float('inf')))
+        tour.append(next_customer)
+        unvisited.remove(next_customer)
+        current = next_customer
+    return tour
+
+
+def split_giant_tour(giant_tour, depot, cost_matrix, travel_time_matrix, requests,
+                     vehicle_capacity, max_travel_time, E_max, battery_threshold=0.8):
+    """
+    Splits a giant tour (list of customer nodes) into routes.
+    It forces a split when adding a new customer would cause the cumulative energy cost (plus cost to depot),
+    total demand, or travel time to exceed the respective limits.
+
+    battery_threshold is a fraction of E_max to trigger splitting early.
+    """
+    routes = []
+    current_route = [depot]
+    current_demand = 0
+    current_travel_time = 0
+    current_energy = 0  # cumulative energy cost from depot along this route
+    current = depot
+
+    for cust in giant_tour:
+        demand = requests[cust]['quantity']
+        travel_time = travel_time_matrix.get((current, cust), float('inf'))
+        energy_cost = cost_matrix.get((current, cust), float('inf'))
+        # Estimated cost from customer back to depot
+        energy_to_depot = cost_matrix.get((cust, depot), float('inf'))
+        travel_time_to_depot = travel_time_matrix.get((cust, depot), float('inf'))
+
+        new_demand = current_demand + demand
+        new_travel_time = current_travel_time + travel_time + travel_time_to_depot
+        new_energy = current_energy + energy_cost + energy_to_depot
+
+        # If adding this customer would exceed any constraint, close the current route.
+        if (new_demand > vehicle_capacity or
+                new_travel_time > max_travel_time or
+                new_energy > E_max * battery_threshold):
+            current_route.append(depot)
+            routes.append(current_route)
+            # Start a new route from the depot with this customer.
+            current_route = [depot, cust]
+            current_demand = demand
+            current_travel_time = travel_time_matrix.get((depot, cust), 0)
+            current_energy = cost_matrix.get((depot, cust), 0)
+            current = cust
+        else:
+            current_route.append(cust)
+            current_demand = new_demand
+            current_travel_time += travel_time
+            current_energy += energy_cost
+            current = cust
+
+    # Close the final route.
+    current_route.append(depot)
+    routes.append(current_route)
+    return routes
+
+
+def generate_giant_tour_and_split(depot, customers, nodes, cost_matrix, travel_time_matrix, requests, vehicle_capacity, max_travel_time, E_max):
+    """
+    Generates a giant tour over all customers and splits it into routes using the updated splitting function.
+    """
+    giant_tour = generate_giant_tour(depot, customers, nodes, cost_matrix)
+
+    routes = split_giant_tour(giant_tour, depot, cost_matrix, travel_time_matrix, requests, vehicle_capacity, max_travel_time, E_max)
+
+
+    return routes
+
+
+def repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
+    """
+    Repairs a route by inserting charging stations when battery is insufficient.
+    Returns a new route that is more likely to be battery feasible.
+    """
+
+    print(f"\n[DEBUG] Route before repair: {route}")
+    print(f"[DEBUG] Initial battery level: {E_max}")
+
+    repaired_route = [route[0]]  # Start with depot.
+    battery = E_max
+    min_battery_threshold = 0.2 * E_max  # 🚨 Insert CS if battery falls below 20% of E_max
+
+    for i in range(1, len(route)):
+        from_node = repaired_route[-1]
+        to_node = route[i]
+        energy_needed = cost_matrix.get((from_node, to_node), float('inf'))
+
+        # 🔹 Safety Check: Ensure all moves are possible
+        if energy_needed == float('inf'):
+            print(f" [DEBUG] ERROR: Segment from {from_node} to {to_node} is unreachable. Route invalid.")
+            return route  # Unreachable route detected, return original
+
+        # 🔹 Pre-check if battery is sufficient
+        print(f"\n🔋 [DEBUG] Battery before move: {battery}")
+        print(f"🚗 Moving from {from_node} to {to_node}, Energy Cost={energy_needed}")
+        if battery - energy_needed <= 0:
+            print(f" [DEBUG] ERROR: Battery will deplete before reaching {to_node}!")
+
+        if energy_needed > battery or battery <= min_battery_threshold:
+            print(f"️ [DEBUG] Battery critically low! Searching for charging station...")
+
+            cs = find_nearest_charging_station(from_node, charging_stations, nodes)
+            if cs is None:
+                print(f" [DEBUG] ERROR: No charging station found from {from_node}. Route infeasible.")
+                return route  # Cannot repair, return the original
+
+            # 🔹 Insert Charging Station and Recharge
+            print(f" [DEBUG] Inserting charging station {cs} before traveling to {to_node}.")
+            repaired_route.append(cs)
+            battery = E_max  # Recharge fully
+
+            # 🔹 Recalculate energy needed from the charging station
+            energy_needed = cost_matrix.get((cs, to_node), float('inf'))
+            if energy_needed > battery:
+                print(f" [DEBUG] ERROR: Even after charging at {cs}, route from {cs} to {to_node} is infeasible. Trying alternative...")
+
+                # Find an alternative charging station
+                alternative_cs = find_nearest_charging_station(cs, charging_stations, nodes, exclude={cs})
+                if alternative_cs:
+                    print(f" [DEBUG] Switching to alternative charging station {alternative_cs} instead of {cs}.")
+                    repaired_route[-1] = alternative_cs  # Replace with an alternative
+                    battery = E_max  # Recharge again
+                else:
+                    print(f" [DEBUG] ERROR: No alternative charging station found. Returning original route.")
+                    return route  # Route cannot be repaired
+
+        # 🔹 Make the move
+        battery -= energy_needed
+        print(f"🔋 [DEBUG] Battery after move: {battery}")
+        repaired_route.append(to_node)
+
+        # 🔹 Recharge at depot
+        if to_node == depot:
+            battery = E_max
+            print(f"🏁 [DEBUG] Reached depot {depot}; battery recharged to {E_max}.")
+
+    print(f"\n[DEBUG] Repaired Route: {repaired_route}")
+    return repaired_route
+
+
+
+def repair_giant_solution(routes, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
+    """
+    Applies the repair_route_battery_feasibility function to each route in the solution.
+    Returns the repaired set of routes.
+    """
+    repaired_routes = []
+    for route in routes:
+        repaired = repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes)
+        repaired_routes.append(repaired)
+    return repaired_routes
