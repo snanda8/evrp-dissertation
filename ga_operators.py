@@ -82,7 +82,8 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
             total_penalty += penalty
 
         visited_customers.update(set(route) - {depot})
-    expected_customers = set(nodes.keys()) - {depot}
+    expected_customers = (set(nodes.keys()) - charging_stations) - {depot}  # Exclude charging stations
+
     if visited_customers != expected_customers:
         missing = expected_customers - visited_customers
         missing_penalty = penalty_weights['missing_customers'] * len(missing)

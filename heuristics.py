@@ -15,7 +15,7 @@ def cluster_customers(customers, nodes, num_clusters):
     return clusters
 
 def nearest_neighbor_route(start_node, customer_set, nodes, cost_matrix, E_max,
-                           charging_stations, requests, vehicle_capacity):
+                           charging_stations, requests, vehicle_capacity, battery):
     """
     Construct a route using a nearest neighbor heuristic with battery constraints.
     """
@@ -41,7 +41,7 @@ def nearest_neighbor_route(start_node, customer_set, nodes, cost_matrix, E_max,
                 best_customer = customer
         if best_customer is None:
             # No feasible customer found; try inserting a charging station.
-            nearest_cs = find_nearest_charging_station(current_node, charging_stations, nodes)
+            nearest_cs = find_nearest_charging_station(current_node, charging_stations, nodes, battery)
             if nearest_cs is None:
                 break
             energy_to_cs = calculate_energy_to_reach(current_node, nearest_cs, cost_matrix)
@@ -61,7 +61,7 @@ def nearest_neighbor_route(start_node, customer_set, nodes, cost_matrix, E_max,
     # Ensure return to depot is feasible.
     energy_to_depot = calculate_energy_to_reach(current_node, start_node, cost_matrix)
     if energy_to_depot > remaining_battery:
-        nearest_cs = find_nearest_charging_station(current_node, charging_stations, nodes)
+        nearest_cs = find_nearest_charging_station(current_node, charging_stations, nodes, battery)
         if nearest_cs is not None:
             energy_to_cs = calculate_energy_to_reach(current_node, nearest_cs, cost_matrix)
             if energy_to_cs <= remaining_battery:
@@ -143,7 +143,7 @@ def heuristic_initial_solution(nodes, cost_matrix, travel_time_matrix, depot,
         clusters = [list(requests.keys())]
     solution = []
     for cluster in clusters:
-        route = nearest_neighbor_route(depot, cluster, nodes, cost_matrix, E_max, charging_stations, requests, vehicle_capacity)
+        route = nearest_neighbor_route(depot, cluster, nodes, cost_matrix, E_max, charging_stations, requests, vehicle_capacity, battery=E_max)
         route = insert_charging_stations_strategically(route, cost_matrix, E_max, charging_stations, depot)
         #route = remove_unnecessary_charging_stations(route, cost_matrix, E_max, charging_stations, depot)
         solution.append(route)
@@ -266,73 +266,135 @@ def generate_giant_tour_and_split(depot, customers, nodes, cost_matrix, travel_t
 
 def repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
     """
-    Repairs a route by inserting charging stations when battery is insufficient.
+    Repairs a route by inserting charging stations when battery is insufficient or when a trap is detected.
     Returns a new route that is more likely to be battery feasible.
     """
-
-    print(f"\n[DEBUG] Route before repair: {route}")
+    print(f"\n🔧 [DEBUG] REPAIRING ROUTE: {route}")
     print(f"[DEBUG] Initial battery level: {E_max}")
 
     repaired_route = [route[0]]  # Start with depot.
     battery = E_max
-    min_battery_threshold = 0.2 * E_max  # 🚨 Insert CS if battery falls below 20% of E_max
+    min_battery_threshold = 0.3 * E_max
 
-    for i in range(1, len(route)):
+    i = 1
+    visited_transitions = set()  # To detect loops
+    charging_station_insertions = 0
+    MAX_INSERTIONS = 15
+
+    while i < len(route):
         from_node = repaired_route[-1]
         to_node = route[i]
         energy_needed = cost_matrix.get((from_node, to_node), float('inf'))
 
-        # 🔹 Safety Check: Ensure all moves are possible
         if energy_needed == float('inf'):
-            print(f" [DEBUG] ERROR: Segment from {from_node} to {to_node} is unreachable. Route invalid.")
-            return route  # Unreachable route detected, return original
+            print(f"❌ [DEBUG] ERROR: Segment from {from_node} to {to_node} is unreachable.")
+            return repaired_route
 
-        # 🔹 Pre-check if battery is sufficient
         print(f"\n🔋 [DEBUG] Battery before move: {battery}")
-        print(f"🚗 Moving from {from_node} to {to_node}, Energy Cost={energy_needed}")
-        if battery - energy_needed <= 0:
-            print(f" [DEBUG] ERROR: Battery will deplete before reaching {to_node}!")
+        print(f"🚗 Attempting move from {from_node} to {to_node}, Cost: {energy_needed}")
+
+        # Prevent infinite loops
+        transition = (from_node, to_node)
+        if transition in visited_transitions:
+            print(f"🛑 [DEBUG] Detected loop at transition {transition}. Ending repair to avoid infinite loop.")
+            return repaired_route
+        visited_transitions.add(transition)
 
         if energy_needed > battery or battery <= min_battery_threshold:
-            print(f"️ [DEBUG] Battery critically low! Searching for charging station...")
+            print(f"⚠️ [DEBUG] Battery too low or critical. Looking for charging station...")
 
-            cs = find_nearest_charging_station(from_node, charging_stations, nodes)
+            cs = find_nearest_charging_station(from_node, charging_stations, cost_matrix, battery)
             if cs is None:
-                print(f" [DEBUG] ERROR: No charging station found from {from_node}. Route infeasible.")
-                return route  # Cannot repair, return the original
+                print(f"❌ [DEBUG] ERROR: No reachable charging station from {from_node}.")
+                return repaired_route
 
-            # 🔹 Insert Charging Station and Recharge
-            print(f" [DEBUG] Inserting charging station {cs} before traveling to {to_node}.")
+            if cs == to_node:
+                print(f"⚠️ [DEBUG] Skipping insertion of CS {cs} before itself.")
+                repaired_route.append(cs)
+                battery = E_max
+                i += 1
+                continue
+
+            if charging_station_insertions >= MAX_INSERTIONS:
+                print(f"🛑 [DEBUG] Max CS insertions reached. Aborting repair.")
+                return repaired_route
+
+            print(f"✅ [DEBUG] Inserting CS {cs} before going to {to_node}")
             repaired_route.append(cs)
-            battery = E_max  # Recharge fully
+            battery = E_max
+            charging_station_insertions += 1
+            continue
 
-            # 🔹 Recalculate energy needed from the charging station
-            energy_needed = cost_matrix.get((cs, to_node), float('inf'))
-            if energy_needed > battery:
-                print(f" [DEBUG] ERROR: Even after charging at {cs}, route from {cs} to {to_node} is infeasible. Trying alternative...")
+        # 🧠 Look ahead to see if to_node traps us
+        battery_after_move = battery - energy_needed
+        unreachable = all(
+            cost_matrix.get((to_node, cs), float('inf')) > battery_after_move
+            for cs in charging_stations
+        )
 
-                # Find an alternative charging station
-                alternative_cs = find_nearest_charging_station(cs, charging_stations, nodes, exclude={cs})
-                if alternative_cs:
-                    print(f" [DEBUG] Switching to alternative charging station {alternative_cs} instead of {cs}.")
-                    repaired_route[-1] = alternative_cs  # Replace with an alternative
-                    battery = E_max  # Recharge again
-                else:
-                    print(f" [DEBUG] ERROR: No alternative charging station found. Returning original route.")
-                    return route  # Route cannot be repaired
+        if unreachable:
+            print(f"⚠️ [DEBUG] Move to {to_node} would trap us. Inserting CS before move.")
+            cs = find_nearest_charging_station(from_node, charging_stations, cost_matrix, battery)
+            if cs and cs != to_node:
+                if charging_station_insertions >= MAX_INSERTIONS:
+                    print(f"🛑 [DEBUG] Max CS insertions reached. Aborting repair.")
+                    return repaired_route
+                repaired_route.append(cs)
+                battery = E_max
+                charging_station_insertions += 1
+                continue
+            else:
+                print(f"❌ [DEBUG] No CS reachable to avoid trap at {to_node}. Ending repair.")
+                return repaired_route
 
-        # 🔹 Make the move
+        # ✅ Make the move
         battery -= energy_needed
-        print(f"🔋 [DEBUG] Battery after move: {battery}")
         repaired_route.append(to_node)
 
-        # 🔹 Recharge at depot
         if to_node == depot:
             battery = E_max
             print(f"🏁 [DEBUG] Reached depot {depot}; battery recharged to {E_max}.")
 
-    print(f"\n[DEBUG] Repaired Route: {repaired_route}")
+        print(f"🔋 [DEBUG] Battery after move: {battery}")
+
+        # Optional post-move emergency check
+        if i + 1 < len(route):
+            can_reach_cs = any(
+                cost_matrix.get((to_node, cs), float('inf')) <= battery
+                for cs in charging_stations
+            )
+            if not can_reach_cs:
+                print(f"⚠️ [DEBUG] From {to_node}, no CS is reachable with battery {battery}.")
+                cs = find_nearest_charging_station(to_node, charging_stations, cost_matrix, battery)
+                if cs is not None:
+                    if charging_station_insertions >= MAX_INSERTIONS:
+                        print(f"🛑 [DEBUG] Max CS insertions reached. Aborting repair.")
+                        return repaired_route
+                    print(f"✅ [DEBUG] Inserting emergency CS {cs} after {to_node}.")
+                    repaired_route.append(cs)
+                    battery = E_max
+                    charging_station_insertions += 1
+                else:
+                    print(f"❌ [DEBUG] No emergency CS reachable from {to_node}. Ending repair.")
+                    return repaired_route
+
+        i += 1
+
+    # 🧹 Remove patterns like [15, CS, 15]
+    while (
+        len(repaired_route) >= 3 and
+        repaired_route[0] == depot and
+        repaired_route[2] == depot and
+        repaired_route[1] in charging_stations
+    ):
+        print(f"🧹 [DEBUG] Removing redundant segment: {repaired_route[:3]}")
+        repaired_route = [repaired_route[0]] + repaired_route[3:]
+
+    print(f"\n✅ [DEBUG] Final repaired route: {repaired_route}")
     return repaired_route
+
+
+
 
 
 

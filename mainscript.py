@@ -62,8 +62,7 @@ population = [repaired_solution]
 additional_population = heuristic_population_initialization(
     population_size, nodes, cost_matrix, travel_time_matrix, DEPOT,
     E_max, recharge_amount, charging_stations, vehicle_capacity,
-    max_travel_time, requests, num_vehicles
-)
+    max_travel_time, requests, num_vehicles)
 population.extend(additional_population)
 print("Combined Initial Population:")
 for sol in population:
@@ -80,15 +79,37 @@ print(f"Assigned Customers: {assigned_customers}")
 if missing_customers:
     print(f"ERROR: Missing Customers in Initial Routes: {missing_customers}")
 
+print(f"\n[DEBUG] Full Customers Set: {customers}")
+print(f"[DEBUG] Charging Stations Set: {charging_stations}")
+
+# Check if any charging stations were mistakenly included in customers
+overlap = customers.intersection(charging_stations)
+if overlap:
+    print(f" [DEBUG] ERROR: Charging stations are incorrectly in the customers list: {overlap}")
+
+
 
 # --- GA Loop ---
 num_generations = 10  # Number of generations
+
 for generation in range(num_generations):
     print(f"\n=== Generation {generation + 1} ===")
+
     evaluated_population = []
+
+    # 🔍 Evaluate current population
     for individual in population:
+        # 🔧 Repair every route in the individual before validation/fitness
+        repaired_individual = []
+        for route in individual:
+            repaired = repair_route_battery_feasibility(
+                route, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes
+            )
+            repaired_individual.append(repaired)
+
+        # ✅ Use repaired version for validation and fitness
         valid_solution = validate_solution(
-            solution=individual,
+            solution=repaired_individual,
             depot=DEPOT,
             requests=requests,
             expected_customers=customers,
@@ -97,27 +118,49 @@ for generation in range(num_generations):
 
         if not valid_solution:
             print("Solution validation failed (duplicate or missing customers).")
-        total_fitness, valid = fitness_function(
+
+        total_fitness, is_battery_valid = fitness_function(
             individual, cost_matrix, travel_time_matrix, E_max, charging_stations,
             recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
             max_travel_time, requests
         )
-        overall_valid = valid_solution and valid
+
+        overall_valid = valid_solution and is_battery_valid
         evaluated_population.append((individual, total_fitness, overall_valid))
+
+    # 📉 Select valid individuals
     valid_population = [ind for ind in evaluated_population if ind[2]]
     valid_population.sort(key=lambda x: x[1])
+
     selected_parents = [ind[0] for ind in valid_population[:max(1, population_size // 2)]]
+
     if len(selected_parents) < 2:
         print("Not enough valid individuals; falling back to full evaluated population.")
         selected_parents = [ind[0] for ind in evaluated_population]
+
     if len(selected_parents) < 2:
         print("Still fewer than 2 parents; duplicating available parent.")
         selected_parents = selected_parents * 2
+
+    # 👶 Generate children
     children = []
     while len(children) < population_size - len(selected_parents):
         p1, p2 = random.sample(selected_parents, 2)
-        child = order_crossover_evrp(p1, p2, cost_matrix, E_max, charging_stations, recharge_amount, DEPOT)
+        child = order_crossover_evrp(
+            p1, p2, cost_matrix, E_max, charging_stations, recharge_amount, DEPOT
+        )
         child = mutate_route(child, mutation_rate=0.4)
-        children.append(child)
+
+        # 🚑 Repair child routes for battery feasibility
+        repaired_child = []
+        for route in child:
+            repaired = repair_route_battery_feasibility(
+                route, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes
+            )
+            repaired_child.append(repaired)
+
+        children.append(repaired_child)
+
+    # 👥 Update population
     population = selected_parents + children
     print(f"Population size at end of generation: {len(population)}")
