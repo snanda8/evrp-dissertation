@@ -1,4 +1,6 @@
 from instance_parser import parse_instance
+from utils import find_nearest_charging_station
+
 
 def validate_no_duplicates_route(route, depot, requests, charging_stations,):
     """
@@ -52,5 +54,35 @@ def validate_solution(solution, depot, requests, charging_stations, expected_cus
 
     print("✅ Validation Passed")
     return True
+
+def ensure_all_customers_present(solution, expected_customers, depot, cost_matrix, nodes, charging_stations, E_max):
+    """
+    Adds any missing customers to a new route to ensure feasibility.
+    """
+    assigned = set()
+    for route in solution:
+        assigned.update([n for n in route if n in expected_customers])
+    missing = expected_customers - assigned
+
+    if not missing:
+        return solution  # All good
+
+    print(f"🧩 [DEBUG] Adding missing customers: {missing}")
+    new_route = [depot]
+    battery = E_max
+    for customer in missing:
+        cost = cost_matrix.get((new_route[-1], customer), float('inf'))
+        if cost > battery:
+            # Need CS
+            cs = find_nearest_charging_station(new_route[-1], charging_stations, cost_matrix, battery)
+            if cs:
+                new_route.append(cs)
+                battery = E_max
+        battery -= cost
+        new_route.append(customer)
+    new_route.append(depot)
+    solution.append(new_route)
+    return solution
+
 
 

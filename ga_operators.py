@@ -81,8 +81,13 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
             print(f"  Travel time exceeded by {excess_time}, Penalty: {penalty}")
             total_penalty += penalty
 
-        visited_customers.update(set(route) - {depot})
-    expected_customers = (set(nodes.keys()) - charging_stations) - {depot}  # Exclude charging stations
+        visited_customers = set()
+        for route in solution:
+            for node in route:
+                if node not in charging_stations and node != depot:
+                    visited_customers.add(node)
+
+        expected_customers = (set(nodes.keys()) - charging_stations) - {depot}
 
     if visited_customers != expected_customers:
         missing = expected_customers - visited_customers

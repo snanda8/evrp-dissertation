@@ -3,7 +3,7 @@ from instance_parser import parse_instance
 from utils import *
 from heuristics import heuristic_population_initialization, generate_giant_tour_and_split, repair_route_battery_feasibility
 from ga_operators import fitness_function, order_crossover_evrp, mutate_route
-from validation import validate_solution, validate_no_duplicates_route
+from validation import validate_solution, validate_no_duplicates_route, ensure_all_customers_present
 from merging import merge_routes
 
 # --- Global Setup: Parse Instance ---
@@ -120,7 +120,7 @@ for generation in range(num_generations):
             print("Solution validation failed (duplicate or missing customers).")
 
         total_fitness, is_battery_valid = fitness_function(
-            individual, cost_matrix, travel_time_matrix, E_max, charging_stations,
+            repaired_individual, cost_matrix, travel_time_matrix, E_max, charging_stations,
             recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
             max_travel_time, requests
         )
@@ -158,6 +158,11 @@ for generation in range(num_generations):
                 route, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes
             )
             repaired_child.append(repaired)
+
+        # 🧩 Ensure all customers are present
+        repaired_child = ensure_all_customers_present(
+            repaired_child, customers, DEPOT, cost_matrix, nodes, charging_stations, E_max
+        )
 
         children.append(repaired_child)
 

@@ -266,18 +266,16 @@ def generate_giant_tour_and_split(depot, customers, nodes, cost_matrix, travel_t
 
 def repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
     """
-    Repairs a route by inserting charging stations when battery is insufficient or when a trap is detected.
-    Returns a new route that is more likely to be battery feasible.
+    Repairs a route by inserting charging stations when battery is insufficient or a trap is predicted.
     """
     print(f"\n🔧 [DEBUG] REPAIRING ROUTE: {route}")
-    print(f"[DEBUG] Initial battery level: {E_max}")
-
-    repaired_route = [route[0]]  # Start with depot.
+    repaired_route = [route[0]]
     battery = E_max
-    min_battery_threshold = 0.3 * E_max
-
     i = 1
-    visited_transitions = set()  # To detect loops
+
+    min_battery_threshold = 0.3 * E_max
+    visited_transitions = set()
+    visited_cs_pairs = set()
     charging_station_insertions = 0
     MAX_INSERTIONS = 15
 
@@ -287,111 +285,91 @@ def repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount,
         energy_needed = cost_matrix.get((from_node, to_node), float('inf'))
 
         if energy_needed == float('inf'):
-            print(f"❌ [DEBUG] ERROR: Segment from {from_node} to {to_node} is unreachable.")
+            print(f"❌ [DEBUG] Segment from {from_node} to {to_node} is unreachable.")
             return repaired_route
 
         print(f"\n🔋 [DEBUG] Battery before move: {battery}")
         print(f"🚗 Attempting move from {from_node} to {to_node}, Cost: {energy_needed}")
 
-        # Prevent infinite loops
         transition = (from_node, to_node)
         if transition in visited_transitions:
-            print(f"🛑 [DEBUG] Detected loop at transition {transition}. Ending repair to avoid infinite loop.")
+            print(f"🛑 [DEBUG] Loop detected at transition {transition}. Aborting.")
             return repaired_route
         visited_transitions.add(transition)
 
-        if energy_needed > battery or battery <= min_battery_threshold:
-            print(f"⚠️ [DEBUG] Battery too low or critical. Looking for charging station...")
+        attempted_stations = set()
 
-            cs = find_nearest_charging_station(from_node, charging_stations, cost_matrix, battery)
+        while energy_needed > battery or battery <= min_battery_threshold or all(
+            cost_matrix.get((to_node, cs), float('inf')) > (battery - energy_needed)
+            for cs in charging_stations
+        ):
+            print(f"⚠️ [DEBUG] Battery too low or move to {to_node} leads to trap.")
+            cs = find_nearest_charging_station(from_node, charging_stations - attempted_stations, cost_matrix, battery)
+
             if cs is None:
-                print(f"❌ [DEBUG] ERROR: No reachable charging station from {from_node}.")
+                print(f"❌ [DEBUG] No CS reachable from {from_node}. Ending repair.")
                 return repaired_route
 
-            if cs == to_node:
-                print(f"⚠️ [DEBUG] Skipping insertion of CS {cs} before itself.")
-                repaired_route.append(cs)
-                battery = E_max
-                i += 1
+            # Check if CS can go anywhere meaningful
+            can_continue = any(
+                cost_matrix.get((cs, nxt), float('inf')) <= E_max
+                for nxt in charging_stations.union({depot})
+                if nxt != cs
+            ) and cost_matrix.get((cs, to_node), float('inf')) <= E_max
+
+            if not can_continue:
+                print(f"❌ [DEBUG] CS {cs} leads to trap. Avoiding.")
+                attempted_stations.add(cs)
                 continue
+
+            cs_pair = (from_node, cs)
+            if cs_pair in visited_cs_pairs:
+                print(f"🛑 [DEBUG] Detected loop: already inserted {cs} after {from_node}")
+                return repaired_route
+            visited_cs_pairs.add(cs_pair)
+
+            print(f"✅ [DEBUG] Inserting CS {cs} before {to_node}")
+            repaired_route.append(cs)
+            battery = E_max
+            charging_station_insertions += 1
 
             if charging_station_insertions >= MAX_INSERTIONS:
                 print(f"🛑 [DEBUG] Max CS insertions reached. Aborting repair.")
                 return repaired_route
 
-            print(f"✅ [DEBUG] Inserting CS {cs} before going to {to_node}")
-            repaired_route.append(cs)
-            battery = E_max
-            charging_station_insertions += 1
-            continue
-
-        # 🧠 Look ahead to see if to_node traps us
-        battery_after_move = battery - energy_needed
-        unreachable = all(
-            cost_matrix.get((to_node, cs), float('inf')) > battery_after_move
-            for cs in charging_stations
-        )
-
-        if unreachable:
-            print(f"⚠️ [DEBUG] Move to {to_node} would trap us. Inserting CS before move.")
-            cs = find_nearest_charging_station(from_node, charging_stations, cost_matrix, battery)
-            if cs and cs != to_node:
-                if charging_station_insertions >= MAX_INSERTIONS:
-                    print(f"🛑 [DEBUG] Max CS insertions reached. Aborting repair.")
-                    return repaired_route
-                repaired_route.append(cs)
-                battery = E_max
-                charging_station_insertions += 1
-                continue
-            else:
-                print(f"❌ [DEBUG] No CS reachable to avoid trap at {to_node}. Ending repair.")
+            energy_needed = cost_matrix.get((cs, to_node), float('inf'))
+            from_node = cs  # retry same to_node
+            transition = (from_node, to_node)
+            if transition in visited_transitions:
+                print(f"🛑 [DEBUG] Loop after CS insertion at {transition}.")
                 return repaired_route
+            visited_transitions.add(transition)
 
         # ✅ Make the move
         battery -= energy_needed
         repaired_route.append(to_node)
 
-        if to_node == depot:
+        # 🔋 Recharge at CS or depot
+        if to_node in charging_stations or to_node == depot:
             battery = E_max
-            print(f"🏁 [DEBUG] Reached depot {depot}; battery recharged to {E_max}.")
+            print(f"🔋 [DEBUG] Recharged at {'Depot' if to_node == depot else 'CS'} {to_node} to full: {battery}")
 
         print(f"🔋 [DEBUG] Battery after move: {battery}")
-
-        # Optional post-move emergency check
-        if i + 1 < len(route):
-            can_reach_cs = any(
-                cost_matrix.get((to_node, cs), float('inf')) <= battery
-                for cs in charging_stations
-            )
-            if not can_reach_cs:
-                print(f"⚠️ [DEBUG] From {to_node}, no CS is reachable with battery {battery}.")
-                cs = find_nearest_charging_station(to_node, charging_stations, cost_matrix, battery)
-                if cs is not None:
-                    if charging_station_insertions >= MAX_INSERTIONS:
-                        print(f"🛑 [DEBUG] Max CS insertions reached. Aborting repair.")
-                        return repaired_route
-                    print(f"✅ [DEBUG] Inserting emergency CS {cs} after {to_node}.")
-                    repaired_route.append(cs)
-                    battery = E_max
-                    charging_station_insertions += 1
-                else:
-                    print(f"❌ [DEBUG] No emergency CS reachable from {to_node}. Ending repair.")
-                    return repaired_route
-
         i += 1
 
-    # 🧹 Remove patterns like [15, CS, 15]
+    # 🧹 Clean-up: Remove [depot, CS, depot] at start
     while (
         len(repaired_route) >= 3 and
         repaired_route[0] == depot and
         repaired_route[2] == depot and
         repaired_route[1] in charging_stations
     ):
-        print(f"🧹 [DEBUG] Removing redundant segment: {repaired_route[:3]}")
+        print(f"🧹 [DEBUG] Removing redundant depot-CS-depot segment: {repaired_route[:3]}")
         repaired_route = [repaired_route[0]] + repaired_route[3:]
 
     print(f"\n✅ [DEBUG] Final repaired route: {repaired_route}")
     return repaired_route
+
 
 
 
