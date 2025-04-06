@@ -1,23 +1,31 @@
 import random
 from instance_parser import parse_instance
-from utils import *
-from heuristics import heuristic_population_initialization, generate_giant_tour_and_split, repair_route_battery_feasibility
+from heuristics import (
+    heuristic_population_initialization,
+    generate_giant_tour_and_split,
+    repair_route_battery_feasibility
+)
 from ga_operators import fitness_function, order_crossover_evrp, mutate_route
-from validation import validate_solution, validate_no_duplicates_route, ensure_all_customers_present
-from merging import merge_routes
+from validation import (
+    validate_solution,
+    validate_no_duplicates_route,
+    ensure_all_customers_present,
+    validate_and_finalize_routes
+)
+from constructive_solver import construct_initial_solution
+from local_search import apply_local_search, plot_routes, route_cost
 
-# --- Global Setup: Parse Instance ---
-instance_file = "instance_files/C101-10.xml"  # Adjust path as needed
+# === CONFIGURATION ===
+instance_file = "instance_files/C101-10.xml"
+
+# === PARSE INSTANCE ===
 (nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
  battery_capacity, num_vehicles_instance, vehicle_capacity, max_travel_time, requests) = parse_instance(instance_file)
 
-print(f"cost_matrix:{cost_matrix}")
-
-# Define global variables based on the instance
 DEPOT = depot
 num_vehicles = num_vehicles_instance
 E_max = battery_capacity
-recharge_amount = E_max  # Adjust as needed
+recharge_amount = E_max
 
 penalty_weights = {
     'missing_customers': 1e6,
@@ -31,93 +39,85 @@ penalty_weights = {
     'vehicle_count': 1e4,
 }
 
-# --- New Giant Tour Splitting Initialization ---
-# Generate a giant tour splitting initial solution using the new functions.
-giant_solution = generate_giant_tour_and_split(
-    DEPOT,
-    list(customers),
-    nodes,
-    cost_matrix,
-    travel_time_matrix,
-    requests,
-    vehicle_capacity,
-    max_travel_time,
-    E_max
+# === CONSTRUCTIVE SOLVER TEST ===
+print("\n\U0001F527 Testing Constructive Initial Solution...\n")
+initial_routes = construct_initial_solution(
+    nodes=nodes,
+    depot=DEPOT,
+    customers=customers,
+    cost_matrix=cost_matrix,
+    vehicle_capacity=vehicle_capacity,
+    E_max=E_max,
+    requests=requests,
+    charging_stations=charging_stations
 )
-print("Giant Tour Splitting Initial Solution:")
-print(giant_solution)
 
-# Repair the giant solution to improve battery feasibility.
-repaired_solution = []
-for route in giant_solution:
-    repaired = repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes)
-    repaired_solution.append(repaired)
-print("Repaired Giant Tour Solution:")
-print(repaired_solution)
+for i, route in enumerate(initial_routes):
+    print(f"🚚 Vehicle {i+1}: {route}")
 
-# Initialize population with the repaired giant solution and additional heuristic solutions.
-population_size = 10  # Number of solutions per generation
+# === LOCAL SEARCH IMPROVEMENT ===
+optimized_routes = apply_local_search(initial_routes, cost_matrix)
+plot_routes(optimized_routes, nodes, DEPOT)
+
+for i, route in enumerate(optimized_routes):
+    print(f"Route {i+1}: {route} — Cost: {route_cost(route, cost_matrix)}")
+
+# === FITNESS EVALUATION ===
+total_fitness, is_battery_valid = fitness_function(
+    initial_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
+    recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
+    max_travel_time, requests
+)
+print("\n🦪 Fitness of Constructive Initial Solution:")
+print(f"Fitness Score: {total_fitness}")
+print(f"Battery Feasible: {'✅ Yes' if is_battery_valid else '❌ No'}")
+
+# === GA COMPONENTS  ===
+giant_solution = generate_giant_tour_and_split(
+    DEPOT, list(customers), nodes, cost_matrix, travel_time_matrix,
+    requests, vehicle_capacity, max_travel_time, E_max
+)
+
+repaired_solution = [repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount,
+                                                      charging_stations, DEPOT, nodes) for route in giant_solution]
+
+population_size = 10
 population = [repaired_solution]
-
 additional_population = heuristic_population_initialization(
     population_size, nodes, cost_matrix, travel_time_matrix, DEPOT,
     E_max, recharge_amount, charging_stations, vehicle_capacity,
-    max_travel_time, requests, num_vehicles)
+    max_travel_time, requests, num_vehicles
+)
 population.extend(additional_population)
-print("Combined Initial Population:")
-for sol in population:
-    print(sol)
 
-assigned_customers = set()
-for route in giant_solution:
-    for node in route:
-        if node in customers:
-            assigned_customers.add(node)
-
+# === DEBUG VALIDATION ===
+assigned_customers = {node for route in giant_solution for node in route if node in customers}
 missing_customers = customers - assigned_customers
 print(f"Assigned Customers: {assigned_customers}")
 if missing_customers:
     print(f"ERROR: Missing Customers in Initial Routes: {missing_customers}")
 
-print(f"\n[DEBUG] Full Customers Set: {customers}")
-print(f"[DEBUG] Charging Stations Set: {charging_stations}")
-
-# Check if any charging stations were mistakenly included in customers
 overlap = customers.intersection(charging_stations)
 if overlap:
     print(f" [DEBUG] ERROR: Charging stations are incorrectly in the customers list: {overlap}")
 
-
-
-# --- GA Loop ---
-num_generations = 10  # Number of generations
-
+# === GA LOOP ===
+num_generations = 2
 for generation in range(num_generations):
     print(f"\n=== Generation {generation + 1} ===")
 
     evaluated_population = []
-
-    # 🔍 Evaluate current population
     for individual in population:
-        # 🔧 Repair every route in the individual before validation/fitness
-        repaired_individual = []
-        for route in individual:
-            repaired = repair_route_battery_feasibility(
-                route, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes
-            )
-            repaired_individual.append(repaired)
-
-        # ✅ Use repaired version for validation and fitness
-        valid_solution = validate_solution(
-            solution=repaired_individual,
-            depot=DEPOT,
-            requests=requests,
-            expected_customers=customers,
-            charging_stations=charging_stations
+        repaired_individual = validate_and_finalize_routes(
+            individual, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes
+        )
+        repaired_individual = ensure_all_customers_present(
+            repaired_individual, customers, DEPOT, cost_matrix, nodes, charging_stations, E_max
         )
 
-        if not valid_solution:
-            print("Solution validation failed (duplicate or missing customers).")
+        valid_solution = validate_solution(
+            repaired_individual, DEPOT, requests, customers, charging_stations
+        )
 
         total_fitness, is_battery_valid = fitness_function(
             repaired_individual, cost_matrix, travel_time_matrix, E_max, charging_stations,
@@ -125,47 +125,41 @@ for generation in range(num_generations):
             max_travel_time, requests
         )
 
-        overall_valid = valid_solution and is_battery_valid
-        evaluated_population.append((individual, total_fitness, overall_valid))
+        evaluated_population.append((repaired_individual, total_fitness, valid_solution and is_battery_valid))
 
-    # 📉 Select valid individuals
     valid_population = [ind for ind in evaluated_population if ind[2]]
     valid_population.sort(key=lambda x: x[1])
-
-    selected_parents = [ind[0] for ind in valid_population[:max(1, population_size // 2)]]
+    selected_parents = [ind[0] for ind in valid_population[:max(2, population_size // 2)]]
 
     if len(selected_parents) < 2:
-        print("Not enough valid individuals; falling back to full evaluated population.")
+        print("⚠️ Not enough valid individuals; using full evaluated population.")
         selected_parents = [ind[0] for ind in evaluated_population]
-
     if len(selected_parents) < 2:
-        print("Still fewer than 2 parents; duplicating available parent.")
-        selected_parents = selected_parents * 2
+        print("⚠️ Still fewer than 2 parents; duplicating available parent.")
+        selected_parents *= 2
 
-    # 👶 Generate children
     children = []
     while len(children) < population_size - len(selected_parents):
         p1, p2 = random.sample(selected_parents, 2)
-        child = order_crossover_evrp(
-            p1, p2, cost_matrix, E_max, charging_stations, recharge_amount, DEPOT
-        )
+        child = order_crossover_evrp(p1, p2, cost_matrix, E_max, charging_stations, recharge_amount, DEPOT)
         child = mutate_route(child, mutation_rate=0.4)
 
-        # 🚑 Repair child routes for battery feasibility
-        repaired_child = []
-        for route in child:
-            repaired = repair_route_battery_feasibility(
-                route, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes
-            )
-            repaired_child.append(repaired)
-
-        # 🧩 Ensure all customers are present
+        repaired_child = validate_and_finalize_routes(
+            child, cost_matrix, E_max, recharge_amount, charging_stations, DEPOT, nodes
+        )
         repaired_child = ensure_all_customers_present(
             repaired_child, customers, DEPOT, cost_matrix, nodes, charging_stations, E_max
         )
-
+        valid_solution = validate_solution(
+            repaired_child, DEPOT, requests, customers, charging_stations
+        )
+        total_fitness, is_battery_valid = fitness_function(
+            repaired_child, cost_matrix, travel_time_matrix, E_max, charging_stations,
+            recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
+            max_travel_time, requests
+        )
+        evaluated_population.append((repaired_child, total_fitness, valid_solution and is_battery_valid))
         children.append(repaired_child)
 
-    # 👥 Update population
     population = selected_parents + children
-    print(f"Population size at end of generation: {len(population)}")
+    print(f"✅ Population size at end of generation: {len(population)}")

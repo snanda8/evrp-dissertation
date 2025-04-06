@@ -60,5 +60,6 @@ def parse_instance(file_path):
     print(f"Charging Stations Parsed: {charging_stations}")
     print(f"Depot: {depot}")
 
+
     return (nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
             battery_capacity, num_vehicles, vehicle_capacity, max_travel_time, requests)

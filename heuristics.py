@@ -264,20 +264,24 @@ def generate_giant_tour_and_split(depot, customers, nodes, cost_matrix, travel_t
     return routes
 
 
+from collections import defaultdict
+
 def repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
     """
     Repairs a route by inserting charging stations when battery is insufficient or a trap is predicted.
+    Ensures the route starts and ends at the depot and avoids CS looping.
     """
     print(f"\n🔧 [DEBUG] REPAIRING ROUTE: {route}")
     repaired_route = [route[0]]
     battery = E_max
     i = 1
 
-    min_battery_threshold = 0.3 * E_max
     visited_transitions = set()
     visited_cs_pairs = set()
-    charging_station_insertions = 0
+    cs_visit_counts = defaultdict(int)
+    last_charging_stations = []
     MAX_INSERTIONS = 15
+    insertions = 0
 
     while i < len(route):
         from_node = repaired_route[-1]
@@ -285,90 +289,86 @@ def repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount,
         energy_needed = cost_matrix.get((from_node, to_node), float('inf'))
 
         if energy_needed == float('inf'):
-            print(f"❌ [DEBUG] Segment from {from_node} to {to_node} is unreachable.")
+            print(f"❌ [DEBUG] Unreachable segment: {from_node} → {to_node}")
             return repaired_route
 
-        print(f"\n🔋 [DEBUG] Battery before move: {battery}")
-        print(f"🚗 Attempting move from {from_node} to {to_node}, Cost: {energy_needed}")
-
+        # Prevent retry loops
         transition = (from_node, to_node)
         if transition in visited_transitions:
-            print(f"🛑 [DEBUG] Loop detected at transition {transition}. Aborting.")
+            print(f"🛑 [DEBUG] Loop detected at {transition}. Aborting.")
             return repaired_route
         visited_transitions.add(transition)
 
-        attempted_stations = set()
+        # Predict trap ahead
+        battery_after_move = battery - energy_needed
+        trap_predicted = battery_after_move <= 0 or all(
+            cost_matrix.get((to_node, cs), float('inf')) > battery_after_move for cs in charging_stations
+        )
 
-        while energy_needed > battery or battery <= min_battery_threshold or all(
-            cost_matrix.get((to_node, cs), float('inf')) > (battery - energy_needed)
-            for cs in charging_stations
-        ):
-            print(f"⚠️ [DEBUG] Battery too low or move to {to_node} leads to trap.")
-            cs = find_nearest_charging_station(from_node, charging_stations - attempted_stations, cost_matrix, battery)
+        # If move is infeasible or leads to a trap
+        if energy_needed > battery or trap_predicted:
+            print(f"⚠️ [DEBUG] Battery too low or trap predicted from {from_node} to {to_node}.")
+            cs_candidates = charging_stations - set(last_charging_stations[-2:])
+            cs = find_nearest_charging_station(from_node, cs_candidates, cost_matrix, battery)
 
             if cs is None:
-                print(f"❌ [DEBUG] No CS reachable from {from_node}. Ending repair.")
+                print(f"❌ [DEBUG] No reachable CS from {from_node}. Ending repair.")
                 return repaired_route
 
-            # Check if CS can go anywhere meaningful
-            can_continue = any(
-                cost_matrix.get((cs, nxt), float('inf')) <= E_max
-                for nxt in charging_stations.union({depot})
-                if nxt != cs
-            ) and cost_matrix.get((cs, to_node), float('inf')) <= E_max
-
-            if not can_continue:
-                print(f"❌ [DEBUG] CS {cs} leads to trap. Avoiding.")
-                attempted_stations.add(cs)
-                continue
-
-            cs_pair = (from_node, cs)
-            if cs_pair in visited_cs_pairs:
-                print(f"🛑 [DEBUG] Detected loop: already inserted {cs} after {from_node}")
+            if cs == from_node or cs == to_node:
+                print(f"🚫 [DEBUG] Skipping invalid CS {cs} between {from_node} → {to_node}")
                 return repaired_route
-            visited_cs_pairs.add(cs_pair)
 
-            print(f"✅ [DEBUG] Inserting CS {cs} before {to_node}")
+            if (from_node, cs) in visited_cs_pairs:
+                print(f"🛑 [DEBUG] CS pair {from_node} → {cs} already used. Aborting loop.")
+                return repaired_route
+
+            visited_cs_pairs.add((from_node, cs))
+            cs_visit_counts[cs] += 1
+            if cs_visit_counts[cs] > 3:
+                print(f"🛑 [DEBUG] CS {cs} visited too often. Ending repair.")
+                return repaired_route
+
             repaired_route.append(cs)
             battery = E_max
-            charging_station_insertions += 1
-
-            if charging_station_insertions >= MAX_INSERTIONS:
-                print(f"🛑 [DEBUG] Max CS insertions reached. Aborting repair.")
+            last_charging_stations.append(cs)
+            insertions += 1
+            if insertions >= MAX_INSERTIONS:
+                print("🛑 [DEBUG] Max CS insertions reached. Aborting.")
                 return repaired_route
+            continue  # Retry to_node after recharge
 
-            energy_needed = cost_matrix.get((cs, to_node), float('inf'))
-            from_node = cs  # retry same to_node
-            transition = (from_node, to_node)
-            if transition in visited_transitions:
-                print(f"🛑 [DEBUG] Loop after CS insertion at {transition}.")
-                return repaired_route
-            visited_transitions.add(transition)
-
-        # ✅ Make the move
+        # Make the move
         battery -= energy_needed
         repaired_route.append(to_node)
 
-        # 🔋 Recharge at CS or depot
         if to_node in charging_stations or to_node == depot:
             battery = E_max
-            print(f"🔋 [DEBUG] Recharged at {'Depot' if to_node == depot else 'CS'} {to_node} to full: {battery}")
+            last_charging_stations.append(to_node)
+            print(f"🔋 [DEBUG] Recharged at {'Depot' if to_node == depot else 'CS'} {to_node}. Battery: {battery}")
 
         print(f"🔋 [DEBUG] Battery after move: {battery}")
         i += 1
 
-    # 🧹 Clean-up: Remove [depot, CS, depot] at start
-    while (
-        len(repaired_route) >= 3 and
-        repaired_route[0] == depot and
-        repaired_route[2] == depot and
-        repaired_route[1] in charging_stations
-    ):
-        print(f"🧹 [DEBUG] Removing redundant depot-CS-depot segment: {repaired_route[:3]}")
-        repaired_route = [repaired_route[0]] + repaired_route[3:]
+    # Ensure route ends at depot
+    if repaired_route[-1] != depot:
+        cost_to_depot = cost_matrix.get((repaired_route[-1], depot), float('inf'))
+        if cost_to_depot <= battery:
+            repaired_route.append(depot)
+            print(f"✅ [DEBUG] Appended depot at end.")
+        else:
+            cs = find_nearest_charging_station(repaired_route[-1], charging_stations, cost_matrix, battery)
+            if cs and cost_matrix.get((cs, depot), float('inf')) <= E_max:
+                repaired_route.extend([cs, depot])
+                print(f"✅ [DEBUG] Added CS {cs} and depot to finish.")
+            else:
+                print(f"❌ [DEBUG] No path to depot. Route truncated.")
 
     print(f"\n✅ [DEBUG] Final repaired route: {repaired_route}")
     return repaired_route
+
+
+
 
 
 

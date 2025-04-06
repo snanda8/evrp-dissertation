@@ -1,5 +1,6 @@
 from instance_parser import parse_instance
 from utils import find_nearest_charging_station
+from heuristics import repair_route_battery_feasibility
 
 
 def validate_no_duplicates_route(route, depot, requests, charging_stations,):
@@ -83,6 +84,25 @@ def ensure_all_customers_present(solution, expected_customers, depot, cost_matri
     new_route.append(depot)
     solution.append(new_route)
     return solution
+
+def validate_and_finalize_routes(individual, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
+    """
+    Validates and repairs all routes in an individual. Ensures each route ends at the depot.
+    """
+    repaired = []
+    for route in individual:
+        # Ensure starts and ends at depot
+        if route[0] != depot:
+            route = [depot] + route
+        if route[-1] != depot:
+            route.append(depot)
+
+        repaired_route = repair_route_battery_feasibility(
+            route, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes
+        )
+        repaired.append(repaired_route)
+    return repaired
+
 
 
 
