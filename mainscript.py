@@ -14,6 +14,8 @@ from validation import (
 )
 from constructive_solver import construct_initial_solution
 from local_search import apply_local_search, plot_routes, route_cost
+from utils import make_routes_battery_feasible
+
 
 # === CONFIGURATION ===
 instance_file = "instance_files/C101-10.xml"
@@ -55,22 +57,39 @@ initial_routes = construct_initial_solution(
 for i, route in enumerate(initial_routes):
     print(f"🚚 Vehicle {i+1}: {route}")
 
+battery_aware_routes = make_routes_battery_feasible(
+    initial_routes, cost_matrix, E_max, charging_stations, DEPOT
+)
+
+# Print updated routes
+for i, route in enumerate(battery_aware_routes):
+    print(f"🔋 Battery-Aware Route {i+1}: {route}")
+
+
 # === LOCAL SEARCH IMPROVEMENT ===
-optimized_routes = apply_local_search(initial_routes, cost_matrix)
+optimized_routes = apply_local_search(battery_aware_routes, cost_matrix)
 plot_routes(optimized_routes, nodes, DEPOT)
 
 for i, route in enumerate(optimized_routes):
     print(f"Route {i+1}: {route} — Cost: {route_cost(route, cost_matrix)}")
 
 # === FITNESS EVALUATION ===
+# === FITNESS EVALUATION OF BATTERY-AWARE ROUTES ===
+print("\n🧪 Fitness of Battery-Aware Routes:")
+
 total_fitness, is_battery_valid = fitness_function(
-    initial_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
+    battery_aware_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
     recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
     max_travel_time, requests
 )
-print("\n🦪 Fitness of Constructive Initial Solution:")
-print(f"Fitness Score: {total_fitness}")
-print(f"Battery Feasible: {'✅ Yes' if is_battery_valid else '❌ No'}")
+
+print(f"⚙️  Fitness Score: {total_fitness:.2f}")
+print(f"🔋 Battery Feasible: {'✅ YES' if is_battery_valid else '❌ NO'}")
+print(f"🚚 Vehicles Used: {len(battery_aware_routes)}")
+
+total_distance = sum(route_cost(route, cost_matrix) for route in battery_aware_routes)
+print(f"📏 Total Distance: {total_distance:.2f}")
+
 
 # === GA COMPONENTS  ===
 giant_solution = generate_giant_tour_and_split(

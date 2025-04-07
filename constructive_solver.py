@@ -1,4 +1,6 @@
 import math
+from copy import deepcopy
+
 
 def calculate_savings(depot, customers, cost_matrix):
     """
@@ -21,7 +23,7 @@ def construct_initial_solution(nodes, depot, customers, cost_matrix, vehicle_cap
     """
     # 1. Start with each customer on their own route
 
-    print(f"[DEBUG] Sample request: {next(iter(requests.items()))}")
+    #print(f"[DEBUG] Sample request: {next(iter(requests.items()))}")
 
     routes = {cust_id: [depot, cust_id, depot] for cust_id in customers}
     loads = {cust_id: requests[cust_id]['quantity'] for cust_id in customers}
@@ -41,22 +43,17 @@ def construct_initial_solution(nodes, depot, customers, cost_matrix, vehicle_cap
             new_load = loads[i] + loads[j]
 
             if new_load <= vehicle_capacity:
-                feasible = is_battery_feasible(new_route, cost_matrix, charging_stations, E_max, depot)
+                # 🚫 Do not check battery feasibility here — defer to repair phase
+                for node in route_j[1:-1]:
+                    routes[node] = new_route
+                for node in route_i[1:-1]:
+                    routes[node] = new_route
+                routes[i] = new_route
 
-
-                if feasible:
-                    # Merge the routes
-                    for node in route_j[1:-1]:
-                        routes[node] = new_route
-                    for node in route_i[1:-1]:
-                        routes[node] = new_route
-                    routes[i] = new_route
-
-                    # ✅ Recalculate loads for all nodes in the merged route
-                    for node in new_route:
-                        if node != depot:
-                            loads[node] = requests[node]['quantity']
-
+                # ✅ Recalculate loads
+                for node in new_route:
+                    if node != depot:
+                        loads[node] = requests[node]['quantity']
 
     # Extract unique routes
     seen = set()
