@@ -11,75 +11,100 @@ def calculate_energy_to_reach(from_node, to_node, cost_matrix):
     return cost_matrix.get((from_node, to_node), float('inf'))
 
 def find_nearest_charging_station(current_node, charging_stations, cost_matrix, battery):
-    """Finds the closest charging station that is reachable from the current node given remaining battery."""
+    """Finds the closest reachable charging station from the current node."""
     best_station = None
     min_cost = float('inf')
 
     for cs in charging_stations:
         if (current_node, cs) in cost_matrix:
             travel_cost = cost_matrix[(current_node, cs)]
-            #  Ensure the station is within battery range
             if travel_cost <= battery and travel_cost < min_cost:
                 min_cost = travel_cost
                 best_station = cs
 
     if best_station:
-        print(f" [DEBUG] Nearest Charging Station to {current_node}: {best_station} (Cost: {min_cost})")
+        print(f"[DEBUG] Nearest CS to {current_node}: {best_station} (Cost: {min_cost})")
     else:
-        print(f" [DEBUG] No reachable charging station from {current_node}, Battery Remaining: {battery}")
+        print(f"[DEBUG] No CS reachable from {current_node}, Battery Left: {battery}")
 
     return best_station
 
+def find_charging_chain(from_node, to_node, charging_stations, cost_matrix, E_max, battery_left, max_depth=2):
+    """
+    Attempts to find a short chain of charging stations between from_node and to_node.
+    Allows one or two intermediate charging stations (depth-limited DFS).
+    """
+    for cs1 in charging_stations:
+        if cost_matrix.get((from_node, cs1), float('inf')) <= battery_left:
+            # Try direct CS1 → to_node
+            if cost_matrix.get((cs1, to_node), float('inf')) <= E_max:
+                return [cs1]
+
+            # Try CS1 → CS2 → to_node
+            for cs2 in charging_stations:
+                if cs2 == cs1:
+                    continue
+                if (cost_matrix.get((cs1, cs2), float('inf')) <= E_max and
+                    cost_matrix.get((cs2, to_node), float('inf')) <= E_max):
+                    return [cs1, cs2]
+    return None  # No valid chain found
+
 def make_routes_battery_feasible(routes, cost_matrix, E_max, charging_stations, depot):
     """
-    Repairs each route by inserting charging stations to maintain battery feasibility.
-    If a segment is not repairable, it skips that segment and continues with remaining nodes.
+    Converts a list of routes into battery-feasible routes by inserting charging stations
+    or splitting the route when necessary.
     """
-    feasible_routes = []
+    battery_feasible_routes = []
 
-    for route_idx, route in enumerate(routes):
-        print(f"\n🔋 Repairing Route {route_idx + 1}: {route}")
+    for idx, route in enumerate(routes):
+        print(f"\n🔋 Repairing Route {idx + 1}: {route}")
+        current_subroute = [depot]
         battery = E_max
-        repaired = [route[0]]  # start at depot
+
         i = 1
-
         while i < len(route):
-            from_node = repaired[-1]
+            from_node = current_subroute[-1]
             to_node = route[i]
-            cost = cost_matrix.get((from_node, to_node), float('inf'))
+            energy_cost = cost_matrix.get((from_node, to_node), float('inf'))
 
-            if cost <= battery:
-                repaired.append(to_node)
-                battery -= cost
-                print(f"✅ From {from_node} → {to_node} | Cost: {cost}, Battery Left: {battery}")
+            if energy_cost <= battery:
+                current_subroute.append(to_node)
+                battery -= energy_cost
+
+                # Recharge if at depot or charging station
                 if to_node == depot or to_node in charging_stations:
-                    battery = E_max  # recharge
-                    print(f"🔌 Recharged at {to_node}, Battery Reset to {E_max}")
-                i += 1
+                    battery = E_max
             else:
-                # Try inserting a CS between from_node and to_node
-                insertable_cs = [
-                    cs for cs in charging_stations
-                    if cost_matrix.get((from_node, cs), float('inf')) <= battery and
-                       cost_matrix.get((cs, to_node), float('inf')) <= E_max
-                ]
-                if insertable_cs:
-                    best_cs = min(insertable_cs, key=lambda cs: cost_matrix[(from_node, cs)] + cost_matrix[(cs, to_node)])
-                    print(f"⚡ Inserting CS {best_cs} between {from_node} → {to_node}")
-                    repaired.append(best_cs)
-                    battery = E_max - cost_matrix[(best_cs, to_node)]  # simulate move to to_node next
-                    repaired.append(to_node)
-                    if to_node == depot or to_node in charging_stations:
-                        battery = E_max
-                    i += 1
+                print(f"⚠️ Battery insufficient for {from_node} → {to_node} | Remaining: {battery}, Cost: {energy_cost}")
+
+                # Try inserting CS chain
+                chain = find_charging_chain(from_node, to_node, charging_stations, cost_matrix, E_max, battery)
+
+                if chain:
+                    for cs in chain:
+                        print(f"🔌 Inserting intermediate CS: {cs}")
+                        travel = cost_matrix[(from_node, cs)]
+                        current_subroute.append(cs)
+                        battery = E_max - travel
+                        from_node = cs
+
+                    current_subroute.append(to_node)
+                    battery -= cost_matrix[(from_node, to_node)]
                 else:
-                    print(f"❌ [ERROR] Cannot reach {to_node} from {from_node}, skipping.")
-                    i += 1  # Skip to_node, continue with next
+                    # Split and restart from depot
+                    current_subroute.append(depot)
+                    battery_feasible_routes.append(current_subroute)
+                    current_subroute = [depot, to_node]
+                    battery = E_max - cost_matrix.get((depot, to_node), float('inf'))
 
-        print(f"✅ Final Repaired Route: {repaired}")
-        feasible_routes.append(repaired)
+            i += 1
 
-    return feasible_routes
+        # Finalize route if not already closed
+        if current_subroute[-1] != depot:
+            current_subroute.append(depot)
+        if current_subroute != [depot, depot]:
+            battery_feasible_routes.append(current_subroute)
 
+        print(f"✅ Final Repaired Subroutes so far: {battery_feasible_routes}")
 
-
+    return battery_feasible_routes

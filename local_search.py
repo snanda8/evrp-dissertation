@@ -37,7 +37,15 @@ def construct_initial_solution(nodes, depot, customers, cost_matrix, vehicle_cap
     return unique_routes
 
 def route_cost(route, cost_matrix):
-    return sum(cost_matrix[(route[i], route[i+1])] for i in range(len(route)-1))
+    total = 0
+    for i in range(len(route) - 1):
+        from_node = route[i]
+        to_node = route[i + 1]
+        if (from_node, to_node) not in cost_matrix:
+            print(f"[WARNING] No cost found for edge: ({from_node}, {to_node})")
+            continue  # or handle as needed
+        total += cost_matrix[(from_node, to_node)]
+    return total
 
 def two_opt(route, cost_matrix):
     best = route

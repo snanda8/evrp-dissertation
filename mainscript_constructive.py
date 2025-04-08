@@ -1,9 +1,9 @@
-import random
 from instance_parser import parse_instance
 from constructive_solver import construct_initial_solution
 from local_search import apply_local_search, plot_routes, route_cost
 from ga_operators import fitness_function
 from utils import make_routes_battery_feasible  # If it’s in utils.py
+from constructive_solver import post_merge_routes
 
 # === PARSE INSTANCE ===
 instance_file = "instance_files/C101-10.xml"
@@ -49,8 +49,54 @@ battery_routes = make_routes_battery_feasible(
 )
 print("🔍 After Battery-Aware Conversion")
 
+
+
+battery_routes = post_merge_routes(
+    battery_routes, cost_matrix, vehicle_capacity, E_max,
+    charging_stations, DEPOT, requests
+)
+
+# Re-apply battery fixing to merged routes
+battery_routes = make_routes_battery_feasible(
+    battery_routes, cost_matrix, E_max, charging_stations, DEPOT
+)
+
+# clean-up to remove [15, 15] or duplicate depot nodes
+battery_routes = [r for r in battery_routes if len(set(r)) > 2 and r != [DEPOT, DEPOT]]
+for route in battery_routes:
+    while route.count(DEPOT) > 2:
+        route.remove(DEPOT)
+
+
 for i, route in enumerate(battery_routes):
-    print(f"🔋 Battery-Aware Route {i+1}: {route}")
+    print(f"🔁 Post-Merged Battery Route {i+1}: {route}")
+
+def sanitize_routes(routes, depot, charging_stations):
+    cleaned = []
+
+    for route in routes:
+        # Remove immediate consecutive duplicates (e.g. [15, 15, ...])
+        route = [n for i, n in enumerate(route) if i == 0 or n != route[i - 1]]
+
+        # Remove trailing duplicate depot (e.g. [..., 15, 15])
+        while len(route) >= 2 and route[-1] == depot and route[-2] == depot:
+            route.pop()
+
+        # Ensure route starts and ends with depot
+        if route[0] != depot:
+            route = [depot] + route
+        if route[-1] != depot:
+            route.append(depot)
+
+        # Route must contain at least one customer (not CS or depot)
+        customer_nodes = [n for n in route if n != depot and n not in charging_stations]
+        if customer_nodes:
+            cleaned.append(route)
+
+    return cleaned
+
+battery_routes = sanitize_routes(battery_routes, DEPOT, charging_stations)
+
 
 # === LOCAL SEARCH ===
 optimized_routes = apply_local_search(battery_routes, cost_matrix)

@@ -2,18 +2,32 @@ import math
 from copy import deepcopy
 
 
-def calculate_savings(depot, customers, cost_matrix):
+def calculate_weighted_savings(depot, customers, cost_matrix, requests):
     """
-    Computes savings for each pair of customers using Clarke & Wright's method.
+    Computes weighted savings for each customer pair using modified Clarke & Wright heuristic.
+    This version penalizes energy cost and demand to improve feasibility in EVRP.
     """
     savings = []
     for i in customers:
         for j in customers:
             if i != j:
-                saving = cost_matrix[(depot, i)] + cost_matrix[(depot, j)] - cost_matrix[(i, j)]
+                c_id = cost_matrix.get((depot, i), float('inf'))
+                c_jd = cost_matrix.get((depot, j), float('inf'))
+                c_ij = cost_matrix.get((i, j), float('inf'))
+
+                if float('inf') in (c_id, c_jd, c_ij):
+                    continue  # skip unreachable pairs
+
+                demand_penalty = (requests[i]["quantity"] + requests[j]["quantity"]) / 2.0
+
+                # Weighted savings = classical saving minus weighted penalties
+                saving = (c_id + c_jd - c_ij) - 0.3 * c_ij - 0.2 * demand_penalty
+
                 savings.append((saving, i, j))
+
     savings.sort(reverse=True)
     return savings
+
 
 
 def construct_initial_solution(nodes, depot, customers, cost_matrix, vehicle_capacity, E_max, requests, charging_stations):
@@ -29,7 +43,7 @@ def construct_initial_solution(nodes, depot, customers, cost_matrix, vehicle_cap
     loads = {cust_id: requests[cust_id]['quantity'] for cust_id in customers}
     batteries = {cust_id: E_max - (cost_matrix[(depot, cust_id)] + cost_matrix[(cust_id, depot)]) for cust_id in customers}
 
-    savings = calculate_savings(depot, customers, cost_matrix)
+    savings = calculate_weighted_savings(depot, customers, cost_matrix, requests)
 
     for s, i, j in savings:
         route_i = routes.get(i)
@@ -42,8 +56,7 @@ def construct_initial_solution(nodes, depot, customers, cost_matrix, vehicle_cap
             new_route = route_i[:-1] + route_j[1:]
             new_load = loads[i] + loads[j]
 
-            if new_load <= vehicle_capacity:
-                # 🚫 Do not check battery feasibility here — defer to repair phase
+            if new_load <= vehicle_capacity and is_battery_feasible(new_route, cost_matrix, charging_stations, E_max, depot):
                 for node in route_j[1:-1]:
                     routes[node] = new_route
                 for node in route_i[1:-1]:
@@ -104,3 +117,40 @@ def is_battery_feasible(route, cost_matrix, charging_stations, E_max, depot):
             battery = E_max
 
     return new_route
+
+def post_merge_routes(routes, cost_matrix, vehicle_capacity, E_max, charging_stations, depot, requests):
+    """
+    Attempts to merge repaired routes into fewer, more efficient ones,
+    while checking both capacity and battery feasibility.
+    """
+    merged_routes = []
+    used = set()
+
+    for i in range(len(routes)):
+        if i in used:
+            continue
+
+        base_route = routes[i][:-1]  # remove depot at end
+        merged = False
+
+        for j in range(i + 1, len(routes)):
+            if j in used:
+                continue
+
+            candidate_route = base_route + routes[j][1:]  # remove depot at start of j
+            demand = sum(requests.get(n, {}).get("quantity", 0) for n in candidate_route if n not in charging_stations and n != depot)
+
+            if demand <= vehicle_capacity:
+                if is_battery_feasible(candidate_route + [depot], cost_matrix, charging_stations, E_max, depot):
+                    merged_routes.append(candidate_route + [depot])
+                    used.add(i)
+                    used.add(j)
+                    merged = True
+                    break
+
+        if not merged:
+            merged_routes.append(routes[i])
+            used.add(i)
+
+    return merged_routes
+
