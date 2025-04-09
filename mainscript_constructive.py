@@ -10,6 +10,13 @@ instance_file = "instance_files/C101-10.xml"
 (nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
  battery_capacity, num_vehicles, vehicle_capacity, max_travel_time, requests) = parse_instance(instance_file)
 
+# === PATCH: Add self-loop costs to prevent (n, n) lookup warnings ===
+for node in nodes:
+    if (node, node) not in cost_matrix:
+        cost_matrix[(node, node)] = 0.0
+    if (node, node) not in travel_time_matrix:
+        travel_time_matrix[(node, node)] = 0.0
+
 DEPOT = depot
 E_max = battery_capacity
 recharge_amount = E_max
@@ -61,6 +68,14 @@ battery_routes = make_routes_battery_feasible(
     battery_routes, cost_matrix, E_max, charging_stations, DEPOT
 )
 
+#  Clean consecutive duplicates (e.g. [11, 11])
+for i in range(len(battery_routes)):
+    cleaned = [battery_routes[i][0]]
+    for node in battery_routes[i][1:]:
+        if node != cleaned[-1]:
+            cleaned.append(node)
+    battery_routes[i] = cleaned
+
 # clean-up to remove [15, 15] or duplicate depot nodes
 battery_routes = [r for r in battery_routes if len(set(r)) > 2 and r != [DEPOT, DEPOT]]
 for route in battery_routes:
@@ -97,6 +112,18 @@ def sanitize_routes(routes, depot, charging_stations):
 
 battery_routes = sanitize_routes(battery_routes, DEPOT, charging_stations)
 
+# Final de-duplication pass: remove any [n, n] adjacent pairs
+for i in range(len(battery_routes)):
+    route = battery_routes[i]
+    cleaned = [route[0]]
+    for node in route[1:]:
+        if node != cleaned[-1]:
+            cleaned.append(node)
+    battery_routes[i] = cleaned
+
+    print("\n Final Cleaned Battery Routes:")
+    for i, route in enumerate(battery_routes):
+        print(f" Route {i + 1}: {route}")
 
 # === LOCAL SEARCH ===
 optimized_routes = apply_local_search(battery_routes, cost_matrix)
@@ -106,6 +133,7 @@ plot_routes(optimized_routes, nodes, DEPOT)
 
 # === FITNESS EVALUATION ===
 print("🔍 Before Fitness Evaluation")
+print(f"Calling fitness_function with {len(optimized_routes)} routes...")
 total_fitness, is_battery_valid = fitness_function(
     optimized_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
     recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,

@@ -35,6 +35,9 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
     total_distance = 0
     total_penalty = 0
     visited_customers = set()
+
+    expected_customers = (set(nodes.keys()) - charging_stations) - {depot}
+
     print("\n=== Multi-Vehicle Fitness Debug ===")
     for idx, route in enumerate(solution):
         print(f"\nProcessing Vehicle {idx + 1} Route: {route}")
@@ -67,7 +70,9 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
         route_demand = 0
         for node in route:
             if node in requests and node not in charging_stations and node != depot:
+                visited_customers.add(node)
                 route_demand += requests[node]['quantity']
+
         print(f"  Route Demand: {route_demand}")
         if route_demand > vehicle_capacity:
             overload = route_demand - vehicle_capacity
@@ -81,22 +86,16 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
             print(f"  Travel time exceeded by {excess_time}, Penalty: {penalty}")
             total_penalty += penalty
 
-        visited_customers = set()
-        for route in solution:
-            for node in route:
-                if node not in charging_stations and node != depot:
-                    visited_customers.add(node)
-
-        expected_customers = (set(nodes.keys()) - charging_stations) - {depot}
 
     if visited_customers != expected_customers:
         missing = expected_customers - visited_customers
         missing_penalty = penalty_weights['missing_customers'] * len(missing)
         total_penalty += missing_penalty
         print(f"  Missing customers {missing} -> penalty: {missing_penalty}")
-        vehicle_penalty = len(solution) * penalty_weights.get('vehicle_count', 1e4)
-        print(f"  Vehicle count penalty: {vehicle_penalty}")
-        total_penalty += vehicle_penalty
+
+    vehicle_penalty = len(solution) * penalty_weights.get('vehicle_count', 1e4)
+    print(f"  Vehicle count penalty: {vehicle_penalty}")
+    total_penalty += vehicle_penalty
     total_fitness = total_distance + total_penalty
     print(f"\nTotal Distance: {total_distance}, Total Penalty: {total_penalty}, Overall Fitness: {total_fitness}")
     return total_fitness, (total_penalty == 0)

@@ -82,10 +82,12 @@ def make_routes_battery_feasible(routes, cost_matrix, E_max, charging_stations, 
 
                 if chain:
                     for cs in chain:
+                        if current_subroute[-1] == cs:
+                            print(f"⛔ Skipping duplicate CS: {cs}")
+                            continue
                         print(f"🔌 Inserting intermediate CS: {cs}")
-                        travel = cost_matrix[(from_node, cs)]
                         current_subroute.append(cs)
-                        battery = E_max - travel
+                        battery = E_max - cost_matrix.get((from_node, cs), float('inf'))
                         from_node = cs
 
                     current_subroute.append(to_node)
