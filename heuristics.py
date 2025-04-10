@@ -369,13 +369,6 @@ def repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount,
 
 
 
-
-
-
-
-
-
-
 def repair_giant_solution(routes, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
     """
     Applies the repair_route_battery_feasibility function to each route in the solution.

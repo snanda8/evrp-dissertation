@@ -126,20 +126,63 @@ for i in range(len(battery_routes)):
         print(f" Route {i + 1}: {route}")
 
 # === LOCAL SEARCH ===
-optimized_routes = apply_local_search(battery_routes, cost_matrix)
+try:
+    optimized_routes = apply_local_search(battery_routes, cost_matrix)
+    print("✅ Local Search completed")
+except Exception as e:
+    print(f"❌ Exception during Local Search: {e}")
+
+    optimized_routes = battery_routes  # Fallback
+print("🧪 DEBUG: Before fitness_function call")
+print("🧪 Optimized Routes:", optimized_routes)
+
 
 # === VISUALIZE ===
 plot_routes(optimized_routes, nodes, DEPOT)
 
+# === DEDUPLICATION ===
+
+def remove_consecutive_duplicates(route):
+    cleaned = [route[0]]
+    for node in route[1:]:
+        if node != cleaned[-1]:
+            cleaned.append(node)
+    return cleaned
+
+optimized_routes = apply_local_search(
+    battery_routes,
+    cost_matrix=cost_matrix,
+    travel_time_matrix=travel_time_matrix,
+    E_max=E_max,
+    charging_stations=charging_stations,
+    recharge_amount=recharge_amount,
+    penalty_weights=penalty_weights,
+    depot=DEPOT,
+    nodes=nodes,
+    vehicle_capacity=vehicle_capacity,
+    max_travel_time=max_travel_time,
+    requests=requests
+)
+
+
+
 # === FITNESS EVALUATION ===
+print("🧪 DEBUG: About to call fitness_function()")
+print("🧪 Optimized Routes:", optimized_routes)
 print("🔍 Before Fitness Evaluation")
 print(f"Calling fitness_function with {len(optimized_routes)} routes...")
-total_fitness, is_battery_valid = fitness_function(
-    optimized_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
-    recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
-    max_travel_time, requests
-)
-print("🔍 After Fitness Evaluation")
+try:
+    total_fitness, is_battery_valid = fitness_function(
+        optimized_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
+        recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
+        max_travel_time, requests
+    )
+    print("🔍 After Fitness Evaluation")
+except Exception as e:
+    print(f"❌ Exception during fitness evaluation: {e}")
+    total_fitness = float('inf')
+    is_battery_valid = False
+
 
 print("\n📊 Final Evaluation of Optimized Routes:")
 print(f"Total Routes: {len(optimized_routes)}")
