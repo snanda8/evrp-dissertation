@@ -63,6 +63,18 @@ battery_routes = post_merge_routes(
     charging_stations, DEPOT, requests
 )
 
+def filter_overloaded_routes(routes, vehicle_capacity, requests, depot, charging_stations):
+    filtered = []
+    for route in routes:
+        demand = sum(requests[n]['quantity'] for n in route if n not in charging_stations and n != depot)
+        if demand <= vehicle_capacity:
+            filtered.append(route)
+        else:
+            print(f"[⚠️] Route demand {demand} exceeds vehicle capacity ({vehicle_capacity}). Route: {route}")
+            # Optionally: split into two or flag for fix
+    return filtered
+
+
 # Re-apply battery fixing to merged routes
 battery_routes = make_routes_battery_feasible(
     battery_routes, cost_matrix, E_max, charging_stations, DEPOT
@@ -163,6 +175,8 @@ optimized_routes = apply_local_search(
     max_travel_time=max_travel_time,
     requests=requests
 )
+
+battery_routes = filter_overloaded_routes(battery_routes, vehicle_capacity, requests, DEPOT, charging_stations)
 
 
 
