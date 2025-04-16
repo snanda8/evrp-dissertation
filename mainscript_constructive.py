@@ -176,7 +176,9 @@ optimized_routes = apply_local_search(
     requests=requests
 )
 
-battery_routes = filter_overloaded_routes(battery_routes, vehicle_capacity, requests, DEPOT, charging_stations)
+#  Apply overload filter immediately after actual local search
+optimized_routes = filter_overloaded_routes(optimized_routes, vehicle_capacity, requests, DEPOT, charging_stations)
+
 
 
 
