@@ -138,13 +138,13 @@ for i in range(len(battery_routes)):
         print(f" Route {i + 1}: {route}")
 
 # === LOCAL SEARCH ===
-try:
+"""try:
     optimized_routes = apply_local_search(battery_routes, cost_matrix)
     print("✅ Local Search completed")
 except Exception as e:
-    print(f"❌ Exception during Local Search: {e}")
+    print(f"❌ Exception during Local Search: {e}")"""
 
-    optimized_routes = battery_routes  # Fallback
+optimized_routes = battery_routes  # Fallback
 print("🧪 DEBUG: Before fitness_function call")
 print("🧪 Optimized Routes:", optimized_routes)
 
