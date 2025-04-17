@@ -63,6 +63,14 @@ def make_routes_battery_feasible(routes, cost_matrix, E_max, charging_stations, 
         for i in range(1, len(route)):
             prev_node = new_route[-1]
             curr_node = route[i]
+            if not inserted_cs:
+                print(f"[ERROR] No feasible CS insertion found between {prev_node} and {curr_node}")
+                infeasible = True
+                break  # Exit current route
+
+            if infeasible:
+                print(f"[WARNING] Skipping route due to infeasibility: {route}")
+                continue
 
             if prev_node == curr_node:
                 continue  # Skip consecutive duplicates
