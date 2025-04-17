@@ -8,38 +8,8 @@ from local_search import apply_local_search
 from ga_operators import fitness_function
 from utils import make_routes_battery_feasible
 from pipeline import run_pipeline
+from evrp_utils import sanitize_routes,filter_overloaded_routes
 
-
-def filter_overloaded_routes(routes, vehicle_capacity, requests, depot, charging_stations):
-    filtered = []
-    for route in routes:
-        demand = sum(requests[n]['quantity'] for n in route if n not in charging_stations and n != depot)
-        if demand <= vehicle_capacity:
-            filtered.append(route)
-        else:
-            print(f"[⚠️] Overloaded route dropped (Demand: {demand}): {route}")
-    return filtered
-
-
-def sanitize_routes(routes, depot, charging_stations):
-    cleaned = []
-
-    for route in routes:
-        route = [n for i, n in enumerate(route) if i == 0 or n != route[i - 1]]  # Remove adjacent duplicates
-
-        while len(route) >= 2 and route[-1] == depot and route[-2] == depot:
-            route.pop()
-
-        if route[0] != depot:
-            route = [depot] + route
-        if route[-1] != depot:
-            route.append(depot)
-
-        customer_nodes = [n for n in route if n != depot and n not in charging_stations]
-        if customer_nodes:
-            cleaned.append(route)
-
-    return cleaned
 
 
 # === CONFIGURATION ===

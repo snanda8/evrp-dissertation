@@ -3,8 +3,8 @@ from constructive_solver import construct_initial_solution, post_merge_routes
 from utils import make_routes_battery_feasible
 from local_search import apply_local_search, route_cost
 from ga_operators import fitness_function
-from evaluate_solver import filter_overloaded_routes  # If it's still in evaluate_solver.py, you can move it here
 from mainscript_constructive import sanitize_routes
+from evrp_utils import sanitize_routes, filter_overloaded_routes
 
 def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, save_plot=False):
     """
