@@ -7,6 +7,7 @@ from constructive_solver import construct_initial_solution, post_merge_routes
 from local_search import apply_local_search
 from ga_operators import fitness_function
 from utils import make_routes_battery_feasible
+from pipeline import run_pipeline
 
 
 def filter_overloaded_routes(routes, vehicle_capacity, requests, depot, charging_stations):
@@ -69,6 +70,11 @@ for filename in sorted(instance_files):
     # Parse instance
     (nodes, cs, depot, customers, cost_matrix, travel_time_matrix,
      E_max, _, vehicle_capacity, max_travel_time, requests) = parse_instance(instance_path)
+
+    instance_data = (nodes, cs, depot, customers, cost_matrix, travel_time_matrix,
+                     E_max, _, vehicle_capacity, max_travel_time, requests)
+
+    routes, stats = run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False)
 
     print(f"[INFO] Parsed {len(customers)} customers, {len(cs)} charging stations, depot: {depot}")
     recharge_amount = E_max
