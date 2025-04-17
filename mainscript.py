@@ -67,7 +67,25 @@ for i, route in enumerate(battery_aware_routes):
 
 
 # === LOCAL SEARCH IMPROVEMENT ===
-optimized_routes = apply_local_search(battery_aware_routes, cost_matrix)
+try:
+    optimized_routes = apply_local_search(
+        battery_aware_routes,
+        cost_matrix=cost_matrix,
+        travel_time_matrix=travel_time_matrix,
+        E_max=E_max,
+        charging_stations=charging_stations,
+        recharge_amount=recharge_amount,
+        penalty_weights=penalty_weights,
+        depot=DEPOT,
+        nodes=nodes,
+        vehicle_capacity=vehicle_capacity,
+        max_travel_time=max_travel_time,
+        requests=requests
+    )
+except Exception as e:
+    print(f"[ERROR] Local search failed: {e}")
+    optimized_routes = battery_aware_routes
+
 plot_routes(optimized_routes, nodes, DEPOT)
 
 for i, route in enumerate(optimized_routes):
