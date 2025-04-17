@@ -95,6 +95,14 @@ for filename in sorted(instance_files):
     battery_routes = make_routes_battery_feasible(battery_routes, cost_matrix, E_max, cs, depot)
     battery_routes = sanitize_routes(battery_routes, depot, cs)
 
+    # Remove routes that have no customers (just depot or CS)
+    battery_routes = [r for r in battery_routes if any(n in customers for n in r)]
+
+    # Final depot cleanup pass
+    for i in range(len(battery_routes)):
+        while battery_routes[i].count(depot) > 2:
+            battery_routes[i].remove(depot)
+
     print(f"[INFO] Battery-feasible, cleaned routes: {battery_routes}")
 
     # === Local Search ===
