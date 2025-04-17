@@ -103,7 +103,12 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
         vehicle_penalty = len(solution) * penalty_weights.get('vehicle_count', 1e4)
         print(f"  Vehicle count penalty: {vehicle_penalty}")
         total_penalty += vehicle_penalty
-        unnecessary_cs_count = sum(1 for node in route if node in charging_stations)
+
+        unnecessary_cs_count = 0
+        for route in solution:
+            unnecessary_cs_count += sum(1 for node in route if node in charging_stations)
+
+        print(f"  Total unnecessary CS visits: {unnecessary_cs_count}")
         total_penalty += penalty_weights['unnecessary_recharges'] * unnecessary_cs_count
 
         total_fitness = total_distance + total_penalty
