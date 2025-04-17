@@ -1,10 +1,13 @@
-import time
 from constructive_solver import construct_initial_solution, post_merge_routes
 from utils import make_routes_battery_feasible
 from local_search import apply_local_search, route_cost
-from ga_operators import fitness_function
 from mainscript_constructive import sanitize_routes
 from evrp_utils import sanitize_routes, filter_overloaded_routes
+import time
+from heuristics import heuristic_population_initialization
+from validation import validate_and_finalize_routes
+from ga_operators import genetic_algorithm, fitness_function
+from local_search import route_cost
 
 def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, save_plot=False):
     """
@@ -83,7 +86,17 @@ def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, 
     # Optional visualization
     if visualize:
         from local_search import plot_routes
-        plot_routes(optimized_routes, nodes, depot, save_plot=save_plot, instance_name=None)
+        plot_routes(
+            optimized_routes,
+            nodes=nodes,
+            depot=depot,
+            charging_stations=charging_stations,
+            method="CWS" or "GA",
+            save_plot=True,
+            instance_name=None,
+            E_max=E_max,
+            cost_matrix=cost_matrix
+        )
 
     runtime = round(time.time() - start, 2)
     total_distance = sum(route_cost(r, cost_matrix) for r in optimized_routes if len(r) > 1)
@@ -98,11 +111,7 @@ def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, 
         'runtime_sec': runtime
     }
 
-import time
-from heuristics import heuristic_population_initialization
-from validation import validate_and_finalize_routes
-from ga_operators import genetic_algorithm, fitness_function
-from local_search import route_cost
+
 
 
 def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, save_plot=False):
@@ -122,13 +131,17 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
     # === 1. Build initial population ===
     population = heuristic_population_initialization(
         nodes=nodes,
-        customers=customers,
         depot=depot,
         vehicle_capacity=vehicle_capacity,
         cost_matrix=cost_matrix,
+        travel_time_matrix=travel_time_matrix,
         E_max=E_max,
+        charging_stations=charging_stations,
+        recharge_amount=recharge_amount,
         requests=requests,
-        charging_stations=charging_stations
+        num_vehicles=ga_config.get("num_vehicles", 3),
+        population_size=ga_config.get("population_size", 30),
+        max_travel_time=max_travel_time
     )
 
     # === 2. Run Genetic Algorithm ===
@@ -155,7 +168,15 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
     )
 
     # === 3. Final cleanup of best solution ===
-    best_routes = validate_and_finalize_routes(best_solution, depot, charging_stations)
+    best_routes = validate_and_finalize_routes(
+        best_solution,
+        cost_matrix,
+        E_max,
+        recharge_amount,
+        charging_stations,
+        depot,
+        nodes
+    )
 
     # === 4. Fitness Evaluation ===
     fitness_score, battery_valid = fitness_function(
@@ -180,7 +201,17 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
     # Optional: visualize best solution
     if visualize:
         from local_search import plot_routes
-        plot_routes(best_routes, nodes, depot, save_plot=save_plot, instance_name=None)
+        plot_routes(
+            best_routes,
+            nodes=nodes,
+            depot=depot,
+            charging_stations=charging_stations,
+            method="CWS" or "GA",
+            save_plot=True,
+            instance_name=None,
+            E_max=E_max,
+            cost_matrix=cost_matrix
+        )
 
     return best_routes, {
         'fitness_score': round(fitness_score, 2),

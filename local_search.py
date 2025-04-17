@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from ga_operators import fitness_function
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import os
 
 def calculate_savings(depot, customers, cost_matrix):
     savings = []
@@ -148,13 +151,52 @@ def apply_local_search(solution, cost_matrix, travel_time_matrix, **fitness_kwar
 
 
 # === VISUALIZATION ===
-def plot_routes(routes, nodes, depot):
-    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS", save_plot=False, instance_name=None, E_max=None, cost_matrix=None):
+    """
+    Enhanced route plotter with color-coded routes, depot/CS markers, and optional battery annotation.
+    """
+    plt.figure(figsize=(10, 7))
+    cmap = cm.get_cmap('tab20', len(routes))
+
     for i, route in enumerate(routes):
-        x, y = zip(*[nodes[n][:2] for n in route])
-        plt.plot(x, y, marker='o', label=f'Route {i + 1}', color=colors[i % len(colors)])
-    dx, dy = nodes[depot][:2]
-    plt.plot(dx, dy, marker='s', markersize=10, color='black', label='Depot')
-    plt.title("EVRP Routes")
+        x = [nodes[n]['x'] for n in route]
+        y = [nodes[n]['y'] for n in route]
+        plt.plot(x, y, label=f"Vehicle {i+1}", color=cmap(i), marker='o')
+
+        # Optional battery annotation
+        if E_max and cost_matrix:
+            battery = E_max
+            for j in range(1, len(route)):
+                from_n, to_n = route[j-1], route[j]
+                cost = cost_matrix.get((from_n, to_n), 0)
+                battery -= cost
+                battery = max(0, battery)
+                plt.text(nodes[to_n]['x'], nodes[to_n]['y'], f"{int(battery)}", fontsize=7, color="red")
+
+    # Mark depot
+    plt.scatter(nodes[depot]['x'], nodes[depot]['y'], c='black', marker='s', s=150, label='Depot')
+    plt.text(nodes[depot]['x'] + 0.5, nodes[depot]['y'] + 0.5, f"Depot ({depot})", fontsize=9)
+
+    # Mark charging stations
+    if charging_stations:
+        for cs in charging_stations:
+            plt.scatter(nodes[cs]['x'], nodes[cs]['y'], c='green', marker='*', s=150)
+            plt.text(nodes[cs]['x'] + 0.5, nodes[cs]['y'] + 0.5, f"CS {cs}", fontsize=8)
+
+    # Mark other nodes
+    for n in nodes:
+        if n != depot and (charging_stations is None or n not in charging_stations):
+            plt.text(nodes[n]['x'] + 0.3, nodes[n]['y'] + 0.3, str(n), fontsize=8)
+
+    plt.title(f"EVRP Route Visualization – {method}")
     plt.legend()
-    plt.show()
+    plt.grid(True)
+
+    if save_plot and instance_name:
+        os.makedirs("plots", exist_ok=True)
+        filepath = f"plots/{instance_name}_{method}_routes.png"
+        plt.savefig(filepath)
+        print(f"[INFO] Plot saved to {filepath}")
+        plt.close()
+    else:
+        plt.show()

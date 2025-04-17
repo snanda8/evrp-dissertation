@@ -236,5 +236,16 @@ population,
             evaluated_population.append((repaired_child, total_fitness, valid_solution and is_battery_valid))
             children.append(repaired_child)
 
+
+
         population = selected_parents + children
         print(f"✅ Population size at end of generation: {len(population)}")
+
+        if best_solution is None:
+            print("⚠️ No valid solution found during GA execution. Returning lowest fitness candidate.")
+            if evaluated_population:
+                best_solution = evaluated_population[0][0]
+            else:
+                best_solution = [[depot, depot]]  # fallback dummy solution
+
+        return best_solution

@@ -7,7 +7,7 @@ from constructive_solver import construct_initial_solution, post_merge_routes
 from local_search import apply_local_search
 from ga_operators import fitness_function
 from utils import make_routes_battery_feasible
-from pipeline import run_pipeline
+from pipeline import run_pipeline, run_ga_pipeline
 from evrp_utils import sanitize_routes,filter_overloaded_routes
 
 
@@ -44,102 +44,29 @@ for filename in sorted(instance_files):
     instance_data = (nodes, cs, depot, customers, cost_matrix, travel_time_matrix,
                      E_max, _, vehicle_capacity, max_travel_time, requests)
 
-    routes, stats = run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False)
+    # === CWS EVALUATION ===
+    routes, stats = run_pipeline(instance_data, penalty_weights, method="CWS", visualize=True, instance_id=instance_id)
+    stats['instance_id'] = instance_id
+    stats['method'] = "CWS"
+    stats['num_customers'] = len(customers)
+    results.append(stats)
 
-    print(f"[INFO] Parsed {len(customers)} customers, {len(cs)} charging stations, depot: {depot}")
-    recharge_amount = E_max
+    # === GA EVALUATION ===
+    ga_config = {
+        "num_generations": 50,
+        "population_size": 30,
+        "mutation_rate": 0.2,
+        "crossover_rate": 0.8,
+        "elite_fraction": 0.1,
+        "verbose": False
+    }
+    ga_routes, ga_stats = run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False)
+    ga_stats['instance_id'] = instance_id
+    ga_stats['method'] = "GA"
+    ga_stats['num_customers'] = len(customers)
+    results.append(ga_stats)
 
-    start = time.time()
 
-    # === Constructive Phase ===
-    initial_routes = construct_initial_solution(
-        nodes=nodes,
-        depot=depot,
-        customers=customers,
-        cost_matrix=cost_matrix,
-        vehicle_capacity=vehicle_capacity,
-        E_max=E_max,
-        requests=requests,
-        charging_stations=cs
-    )
-    print(f"[INFO] Initial routes: {initial_routes}")
-    for i, route in enumerate(initial_routes):
-        print(f"[DEBUG] Initial Route {i + 1}: {route}")
-
-    battery_routes = make_routes_battery_feasible(initial_routes, cost_matrix, E_max, cs, depot)
-    battery_routes = post_merge_routes(battery_routes, cost_matrix, vehicle_capacity, E_max, cs, depot, requests)
-    battery_routes = make_routes_battery_feasible(battery_routes, cost_matrix, E_max, cs, depot)
-    battery_routes = sanitize_routes(battery_routes, depot, cs)
-
-    # Remove routes that have no customers (just depot or CS)
-    battery_routes = [r for r in battery_routes if any(n in customers for n in r)]
-
-    # Final depot cleanup pass
-    for i in range(len(battery_routes)):
-        while battery_routes[i].count(depot) > 2:
-            battery_routes[i].remove(depot)
-
-    print(f"[INFO] Battery-feasible, cleaned routes: {battery_routes}")
-
-    # === Local Search ===
-    optimized_routes = apply_local_search(
-        battery_routes,
-        cost_matrix=cost_matrix,
-        travel_time_matrix=travel_time_matrix,
-        E_max=E_max,
-        charging_stations=cs,
-        recharge_amount=recharge_amount,
-        penalty_weights=penalty_weights,
-        depot=depot,
-        nodes=nodes,
-        vehicle_capacity=vehicle_capacity,
-        max_travel_time=max_travel_time,
-        requests=requests
-    )
-
-    optimized_routes = filter_overloaded_routes(optimized_routes, vehicle_capacity, requests, depot, cs)
-
-    served_customers = set(n for r in optimized_routes for n in r if n in customers)
-    missing_customers = set(customers) - served_customers
-    print(f"[DEBUG] Served customers: {served_customers}")
-    if missing_customers:
-        print(f"[WARNING] Missing customers: {missing_customers}")
-
-    # === Evaluation ===
-    total_fitness, battery_valid = fitness_function(
-        optimized_routes,
-        cost_matrix,
-        travel_time_matrix,
-        E_max,
-        cs,
-        recharge_amount,
-        penalty_weights,
-        depot,
-        nodes,
-        vehicle_capacity,
-        max_travel_time,
-        requests
-    )
-
-    end = time.time()
-    runtime_sec = round(end - start, 2)
-
-    total_distance = sum(
-        sum(cost_matrix[(route[i], route[i + 1])] for i in range(len(route) - 1))
-        for route in optimized_routes if len(route) > 1
-    )
-    num_cs_visits = sum(1 for route in optimized_routes for node in route if node in cs)
-
-    results.append({
-        "instance_id": instance_id,
-        "num_customers": len(customers),
-        "num_routes": len(optimized_routes),
-        "total_distance": round(total_distance, 2),
-        "fitness_score": round(total_fitness, 2),
-        "is_feasible": battery_valid,
-        "num_CS_visits": num_cs_visits,
-        "runtime_sec": runtime_sec
-    })
 
 # === WRITE TO CSV ===
 with open(OUTPUT_CSV, "w", newline="") as csvfile:

@@ -1,2 +1,3 @@
-instance_id,num_customers,num_routes,total_distance,fitness_score,is_feasible,num_CS_visits,runtime_sec
-C101-10,10,0,0,10000000.0,False,0,0.0
+fitness_score,is_feasible,num_routes,total_distance,num_CS_visits,runtime_sec,instance_id,method,num_customers
+10000000.0,False,0,0,0,0.0,C101-10,CWS,10
+1151384.0,False,4,384.0,6,0.24,C101-10,GA,10
