@@ -9,7 +9,8 @@ from validation import validate_and_finalize_routes
 from ga_operators import genetic_algorithm, fitness_function
 from local_search import route_cost
 
-def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, save_plot=False):
+def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, instance_id=None):
+
     """
     Runs the EVRP pipeline (construct → repair → local search → evaluate).
     Supports method='CWS' or 'GA'. Returns final routes and performance stats.
@@ -114,7 +115,8 @@ def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, 
 
 
 
-def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, save_plot=False):
+def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, instance_id=None):
+
     """
     Wrapper to run the GA-based EVRP solver and return comparable output for evaluation.
     """

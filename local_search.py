@@ -159,8 +159,8 @@ def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS", save
     cmap = cm.get_cmap('tab20', len(routes))
 
     for i, route in enumerate(routes):
-        x = [nodes[n]['x'] for n in route]
-        y = [nodes[n]['y'] for n in route]
+        x = [nodes[n][0] for n in route]
+        y = [nodes[n][1] for n in route]
         plt.plot(x, y, label=f"Vehicle {i+1}", color=cmap(i), marker='o')
 
         # Optional battery annotation
@@ -174,8 +174,8 @@ def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS", save
                 plt.text(nodes[to_n]['x'], nodes[to_n]['y'], f"{int(battery)}", fontsize=7, color="red")
 
     # Mark depot
-    plt.scatter(nodes[depot]['x'], nodes[depot]['y'], c='black', marker='s', s=150, label='Depot')
-    plt.text(nodes[depot]['x'] + 0.5, nodes[depot]['y'] + 0.5, f"Depot ({depot})", fontsize=9)
+    plt.scatter(nodes[depot][0], nodes[depot][1], c='black', marker='s', s=150, label='Depot')
+    plt.text(nodes[depot][0] + 0.5, nodes[depot][1] + 0.5, f"Depot ({depot})", fontsize=9)
 
     # Mark charging stations
     if charging_stations:
@@ -186,7 +186,7 @@ def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS", save
     # Mark other nodes
     for n in nodes:
         if n != depot and (charging_stations is None or n not in charging_stations):
-            plt.text(nodes[n]['x'] + 0.3, nodes[n]['y'] + 0.3, str(n), fontsize=8)
+            plt.text(nodes[n][0] + 0.3, nodes[n][1] + 0.3, str(n), fontsize=8)
 
     plt.title(f"EVRP Route Visualization – {method}")
     plt.legend()
