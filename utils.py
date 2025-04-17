@@ -59,27 +59,20 @@ def make_routes_battery_feasible(routes, cost_matrix, E_max, charging_stations, 
     for route in routes:
         new_route = [route[0]]  # Start with depot
         remaining_battery = E_max
+        infeasible = False  # Track whether the current route becomes invalid
 
         for i in range(1, len(route)):
             prev_node = new_route[-1]
             curr_node = route[i]
-            if not inserted_cs:
-                print(f"[ERROR] No feasible CS insertion found between {prev_node} and {curr_node}")
-                infeasible = True
-                break  # Exit current route
-
-            if infeasible:
-                print(f"[WARNING] Skipping route due to infeasibility: {route}")
-                continue
 
             if prev_node == curr_node:
                 continue  # Skip consecutive duplicates
 
             cost = cost_matrix.get((prev_node, curr_node), float('inf'))
-
             if cost == float('inf'):
                 print(f"[Warning] No path from {prev_node} to {curr_node}")
-                continue
+                infeasible = True
+                break
 
             # If battery is sufficient including safety margin, proceed without recharge
             if remaining_battery >= cost + safety_margin:
@@ -87,13 +80,12 @@ def make_routes_battery_feasible(routes, cost_matrix, E_max, charging_stations, 
                 new_route.append(curr_node)
                 continue
 
-            # Attempt to find an intermediate CS that makes this segment reachable
+            # Battery too low — try inserting a CS
             inserted_cs = False
             for cs in charging_stations:
                 to_cs = cost_matrix.get((prev_node, cs), float('inf'))
                 cs_to_next = cost_matrix.get((cs, curr_node), float('inf'))
 
-                # Ensure we can reach the CS, and from CS to the next node
                 if to_cs <= remaining_battery and cs_to_next <= E_max:
                     new_route.append(cs)
                     remaining_battery = E_max - cs_to_next
@@ -103,13 +95,17 @@ def make_routes_battery_feasible(routes, cost_matrix, E_max, charging_stations, 
 
             if not inserted_cs:
                 print(f"[ERROR] No feasible CS insertion found between {prev_node} and {curr_node}")
-                return []  # Route is infeasible under current constraints
+                infeasible = True
+                break
 
-        # Final check: if last node isn’t depot, ensure we can return or recharge before doing so
+        if infeasible:
+            print(f"[WARNING] Skipping route due to infeasibility: {route}")
+            continue  # Skip this route entirely
+
+        # Final leg: check ability to return to depot
         if new_route[-1] != depot:
             cost_to_depot = cost_matrix.get((new_route[-1], depot), float('inf'))
             if remaining_battery < cost_to_depot:
-                # Try inserting a CS before depot if needed
                 inserted_final_cs = False
                 for cs in charging_stations:
                     to_cs = cost_matrix.get((new_route[-1], cs), float('inf'))
@@ -123,7 +119,7 @@ def make_routes_battery_feasible(routes, cost_matrix, E_max, charging_stations, 
 
                 if not inserted_final_cs:
                     print(f"[ERROR] Could not return to depot from {new_route[-1]}")
-                    return []  # Infeasible route
+                    continue  # Skip route instead of failing all
 
             new_route.append(depot)
 
