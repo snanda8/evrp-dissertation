@@ -47,7 +47,8 @@ initial_routes = construct_initial_solution(
 )
 
 for i, route in enumerate(initial_routes):
-    print(f"🚚 Vehicle {i+1}: {route}")
+    print(f"[DEBUG] Initial Route {i+1}: {route}")
+
 
 # === BATTERY-AWARE CONVERSION ===
 print("🔍 Before Battery-Aware Conversion")

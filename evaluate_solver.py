@@ -87,6 +87,8 @@ for filename in sorted(instance_files):
         charging_stations=cs
     )
     print(f"[INFO] Initial routes: {initial_routes}")
+    for i, route in enumerate(initial_routes):
+        print(f"[DEBUG] Initial Route {i + 1}: {route}")
 
     battery_routes = make_routes_battery_feasible(initial_routes, cost_matrix, E_max, cs, depot)
     battery_routes = post_merge_routes(battery_routes, cost_matrix, vehicle_capacity, E_max, cs, depot, requests)
