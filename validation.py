@@ -56,34 +56,44 @@ def validate_solution(solution, depot, requests, charging_stations, expected_cus
     print("✅ Validation Passed")
     return True
 
-def ensure_all_customers_present(solution, expected_customers, depot, cost_matrix, nodes, charging_stations, E_max):
+def ensure_all_customers_present(routes, customers, depot, cost_matrix, nodes, charging_stations, E_max):
     """
-    Adds any missing customers to a new route to ensure feasibility.
+    Ensure that every customer appears in the solution exactly once.
+    If a customer is missing, insert it into the nearest feasible route or create a new one.
     """
-    assigned = set()
-    for route in solution:
-        assigned.update([n for n in route if n in expected_customers])
-    missing = expected_customers - assigned
+    present_customers = set(n for r in routes for n in r if n in customers)
+    missing_customers = set(customers) - present_customers
 
-    if not missing:
-        return solution  # All good
+    if missing_customers:
+        print(f"[REPAIR] Reinserting missing customers: {missing_customers}")
 
-    print(f"🧩 [DEBUG] Adding missing customers: {missing}")
-    new_route = [depot]
-    battery = E_max
-    for customer in missing:
-        cost = cost_matrix.get((new_route[-1], customer), float('inf'))
-        if cost > battery:
-            # Need CS
-            cs = find_nearest_charging_station(new_route[-1], charging_stations, cost_matrix, battery)
-            if cs:
-                new_route.append(cs)
-                battery = E_max
-        battery -= cost
-        new_route.append(customer)
-    new_route.append(depot)
-    solution.append(new_route)
-    return solution
+    for customer in missing_customers:
+        # Try inserting into an existing route
+        best_route_idx = -1
+        best_position = -1
+        best_increase = float('inf')
+
+        for i, route in enumerate(routes):
+            for j in range(1, len(route) - 1):  # Avoid depot ends
+                before, after = route[j - 1], route[j]
+                cost_before = cost_matrix.get((before, customer), float('inf'))
+                cost_after = cost_matrix.get((customer, after), float('inf'))
+                cost_original = cost_matrix.get((before, after), float('inf'))
+
+                added_cost = cost_before + cost_after - cost_original
+                if added_cost < best_increase:
+                    best_increase = added_cost
+                    best_route_idx = i
+                    best_position = j
+
+        if best_route_idx != -1:
+            routes[best_route_idx].insert(best_position, customer)
+        else:
+            # Create a fallback route
+            print(f"[REPAIR] Creating new route for customer {customer}")
+            routes.append([depot, customer, depot])
+
+    return routes
 
 def validate_and_finalize_routes(individual, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
     """

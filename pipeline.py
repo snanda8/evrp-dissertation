@@ -9,6 +9,7 @@ from validation import validate_and_finalize_routes
 from ga_operators import genetic_algorithm, fitness_function
 from local_search import route_cost
 from local_search import plot_routes
+from ga_operators import remove_trivial_routes
 
 def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, instance_id=None):
 
@@ -181,6 +182,7 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
         depot,
         nodes
     )
+    best_solution = remove_trivial_routes(best_solution, depot, charging_stations)
 
     # === 4. Fitness Evaluation ===
     fitness_score, battery_valid = fitness_function(

@@ -5,6 +5,18 @@ from validation import validate_and_finalize_routes, ensure_all_customers_presen
 print("📦 ga_operators.py loaded successfully")
 
 
+def remove_trivial_routes(routes, depot, charging_stations):
+    """
+    Removes routes with only one customer (ignoring depots and CS).
+    """
+    cleaned = []
+    for route in routes:
+        customer_count = sum(1 for n in route if n not in charging_stations and n != depot)
+        if customer_count > 1:
+            cleaned.append(route)
+        else:
+            print(f"[FILTER] Removing trivial route: {route}")
+    return cleaned
 def update_battery(route, cost_matrix, E_max, charging_stations, recharge_amount, depot):
     battery = E_max
     recharged = 0
@@ -185,8 +197,8 @@ def genetic_algorithm(
             repaired = ensure_all_customers_present(
                 repaired, customers, depot, cost_matrix, nodes, charging_stations, E_max
             )
-            # Filter routes with only depot or invalid length
-            repaired = [r for r in repaired if len(r) > 2 and any(n in customers for n in r)]
+            # Filter trivial routes AFTER re-adding missing customers
+            repaired = [r for r in repaired if sum(n not in charging_stations and n != depot for n in r) > 1]
 
             valid = validate_solution(repaired, depot, requests, customers, charging_stations)
 
@@ -247,6 +259,8 @@ def genetic_algorithm(
         print("❌ No valid GA solution found.")
         return [], float('inf')
 
+
+
     # Final revalidation of best solution
     best_solution = validate_and_finalize_routes(
         best_solution, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes
@@ -255,5 +269,6 @@ def genetic_algorithm(
         best_solution, customers, depot, cost_matrix, nodes, charging_stations, E_max
     )
     best_solution = [r for r in best_solution if len(r) > 2 and any(n in customers for n in r)]
+    best_solution = remove_trivial_routes(best_solution, depot, charging_stations)
 
     return best_solution
