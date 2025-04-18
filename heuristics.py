@@ -161,10 +161,15 @@ def heuristic_initial_solution(nodes, cost_matrix, travel_time_matrix, depot,
 
 def heuristic_population_initialization(population_size, nodes, cost_matrix, travel_time_matrix, depot,
                                         E_max, recharge_amount, charging_stations,
-                                        vehicle_capacity, max_travel_time, requests, num_vehicles):
+                                        vehicle_capacity, max_travel_time, requests, num_vehicles, initial_routes=None):
     population = []
-    for _ in range(population_size):
-        sol = heuristic_initial_solution(nodes, cost_matrix, travel_time_matrix, depot,
+
+    if initial_routes:
+        population.append(initial_routes)
+
+    while len(population) < population_size:
+        for _ in range(population_size):
+            sol = heuristic_initial_solution(nodes, cost_matrix, travel_time_matrix, depot,
                                          E_max, recharge_amount, charging_stations,
                                          vehicle_capacity, max_travel_time, requests, num_vehicles)
         population.append(sol)

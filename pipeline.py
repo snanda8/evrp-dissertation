@@ -128,6 +128,18 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
     (nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
      E_max, _, vehicle_capacity, max_travel_time, requests) = instance_data
 
+    try:
+        warm_routes, _ = run_pipeline(
+            instance_data,
+            penalty_weights,
+            method="CWS",
+            visualize=False,
+            instance_id=instance_id
+        )
+    except Exception as e:
+        print(f"[WARNING] Failed to generate warm-start CWS route: {e}")
+        warm_routes = []
+
     DEPOT = depot
     recharge_amount = E_max
 
@@ -146,7 +158,8 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
         requests=requests,
         num_vehicles=ga_config.get("num_vehicles", 3),
         population_size=ga_config.get("population_size", 30),
-        max_travel_time=max_travel_time
+        max_travel_time=max_travel_time,
+        initial_routes=warm_routes
     )
 
     # === 2. Run Genetic Algorithm ===

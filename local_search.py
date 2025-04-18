@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 from copy import deepcopy
-from ga_operators import fitness_function
+from fitness import fitness_function
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import os

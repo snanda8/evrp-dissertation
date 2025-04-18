@@ -41,12 +41,20 @@ for filename in sorted(instance_files):
     instance_id = filename.replace(".xml", "")
     print(f"\n🔍 Evaluating instance: {instance_id}")
 
-    # Parse instance
+    # === Parse the instance ===
     (nodes, cs, depot, customers, cost_matrix, travel_time_matrix,
      E_max, _, vehicle_capacity, max_travel_time, requests) = parse_instance(instance_path)
 
-    instance_data = (nodes, cs, depot, customers, cost_matrix, travel_time_matrix,
-                     E_max, _, vehicle_capacity, max_travel_time, requests)
+    print(f"[DEBUG] Instance: {instance_id}")
+    print(f"  Depot: {depot}")
+    print(f"  Customers: {sorted(customers)}")
+    print(f"  Charging Stations: {sorted(cs)}")
+    print(f"  All nodes: {sorted(nodes.keys())}")
+
+    instance_data = (
+        nodes, cs, depot, customers, cost_matrix, travel_time_matrix,
+        E_max, _, vehicle_capacity, max_travel_time, requests
+    )
 
     # === CWS Evaluation ===
     try:
@@ -65,20 +73,20 @@ for filename in sorted(instance_files):
         print(f"[ERROR] CWS failed on {instance_id}: {e}")
 
     # === GA Evaluation ===
-    try:
-        ga_routes, ga_stats = run_ga_pipeline(
-            instance_data,
-            penalty_weights,
-            ga_config,
-            visualize=True,
-            instance_id=instance_id
-        )
-        ga_stats['instance_id'] = instance_id
-        ga_stats['method'] = "GA"
-        ga_stats['num_customers'] = len(customers)
-        results.append(ga_stats)
-    except Exception as e:
-        print(f"[ERROR] GA failed on {instance_id}: {e}")
+try:
+    ga_routes, ga_stats = run_ga_pipeline(
+        instance_data,
+        penalty_weights,
+        ga_config,
+        visualize=True,
+        instance_id=instance_id
+    )
+    ga_stats['instance_id'] = instance_id
+    ga_stats['method'] = "GA"
+    ga_stats['num_customers'] = len(customers)
+    results.append(ga_stats)
+except Exception as e:
+    print(f"[ERROR] GA failed on {instance_id}: {e}")
 
 # === WRITE TO CSV ===
 if results:

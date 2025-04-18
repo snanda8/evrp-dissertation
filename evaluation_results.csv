@@ -1,4 +1,5 @@
 fitness_score,is_feasible,num_routes,total_distance,num_CS_visits,runtime_sec,instance_id,method,num_customers
-10000000.0,False,0,0,0,0.27,C101-10,CWS,10
-45401.0,False,3,401.0,5,1.2,C101-10,GA,10
-10000000.0,False,0,0,0,0.16,R102-10,CWS,10
+10000000.0,False,0,0,0,0.14,C101-10,CWS,10
+5000000.0,False,0,0,0,0.13,C101-5 (2),CWS,5
+10000000.0,False,0,0,0,0.13,R102-10,CWS,10
+10000000.0,False,0,0,0,0.15,RC102-10,CWS,10
