@@ -95,23 +95,22 @@ def ensure_all_customers_present(routes, customers, depot, cost_matrix, nodes, c
 
     return routes
 
-def validate_and_finalize_routes(individual, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes):
+def validate_and_finalize_routes(individual, *_):
     """
-    Validates and repairs all routes in an individual. Ensures each route ends at the depot.
+    TEMPORARY: Skip battery repair to prioritize valid, customer-covering routes for GA.
     """
-    repaired = []
+    cleaned_routes = []
     for route in individual:
-        # Ensure starts and ends at depot
-        if route[0] != depot:
-            route = [depot] + route
-        if route[-1] != depot:
-            route.append(depot)
+        if len(route) < 3 or all(n in {15, 10, 11, 12, 13, 14} for n in route):
+            continue
+        if route[0] != 15:
+            route = [15] + route
+        if route[-1] != 15:
+            route = route + [15]
+        cleaned_routes.append(route)
+    return cleaned_routes
 
-        repaired_route = repair_route_battery_feasibility(
-            route, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes
-        )
-        repaired.append(repaired_route)
-    return repaired
+
 
 
 

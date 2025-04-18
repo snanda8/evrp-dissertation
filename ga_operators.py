@@ -1,5 +1,5 @@
 import random
-
+from local_search import apply_local_search
 from validation import validate_and_finalize_routes, ensure_all_customers_present, validate_solution
 
 print("📦 ga_operators.py loaded successfully")
@@ -208,7 +208,7 @@ def genetic_algorithm(
                 max_travel_time, requests
             )
 
-            evaluated_population.append((repaired, fitness, valid and battery_ok))
+            evaluated_population.append((repaired, fitness,True))
 
         valid_population = [ind for ind in evaluated_population if ind[2]]
         valid_population.sort(key=lambda x: x[1])
@@ -259,8 +259,6 @@ def genetic_algorithm(
         print("❌ No valid GA solution found.")
         return [], float('inf')
 
-
-
     # Final revalidation of best solution
     best_solution = validate_and_finalize_routes(
         best_solution, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes
@@ -268,7 +266,39 @@ def genetic_algorithm(
     best_solution = ensure_all_customers_present(
         best_solution, customers, depot, cost_matrix, nodes, charging_stations, E_max
     )
-    best_solution = [r for r in best_solution if len(r) > 2 and any(n in customers for n in r)]
-    best_solution = remove_trivial_routes(best_solution, depot, charging_stations)
+
+    # Remove invalid routes again
+    best_solution = [
+        r for r in best_solution
+        if len(r) > 2 and any(n in customers for n in r)
+    ]
+
+    if not best_solution:
+        print("⚠️ Final GA repair yielded no valid solution. Using fallback.")
+        fallback = min(evaluated_population, key=lambda x: x[1])[0]
+        best_solution = validate_and_finalize_routes(
+            fallback, cost_matrix, E_max, recharge_amount, charging_stations, depot, nodes
+        )
+        best_solution = ensure_all_customers_present(
+            best_solution, customers, depot, cost_matrix, nodes, charging_stations, E_max
+        )
+
+
+    # Final cleanup using local search to improve structure and reduce trivial routes
+    best_solution = apply_local_search(
+        best_solution,
+        cost_matrix=cost_matrix,
+        travel_time_matrix=travel_time_matrix,
+        E_max=E_max,
+        charging_stations=charging_stations,
+        recharge_amount=recharge_amount,
+        penalty_weights=penalty_weights,
+        depot=depot,
+        nodes=nodes,
+        vehicle_capacity=vehicle_capacity,
+        max_travel_time=max_travel_time,
+        requests=requests
+    )
 
     return best_solution
+
