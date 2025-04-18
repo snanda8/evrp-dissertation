@@ -151,10 +151,19 @@ def apply_local_search(solution, cost_matrix, travel_time_matrix, **fitness_kwar
 
 
 # === VISUALIZATION ===
-def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS", save_plot=False, instance_name=None, E_max=None, cost_matrix=None):
+def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS",
+                cost_matrix=None, E_max=None, show_battery=False,
+                save_plot=False, instance_id=None):
+
+
+
     """
     Enhanced route plotter with color-coded routes, depot/CS markers, and optional battery annotation.
     """
+    print(f"[DEBUG] Plotting {len(routes)} routes")
+    for i, route in enumerate(routes):
+        print(f"  Route {i + 1}: {route}")
+
     plt.figure(figsize=(10, 7))
     cmap = cm.get_cmap('tab20', len(routes))
 
@@ -171,7 +180,7 @@ def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS", save
                 cost = cost_matrix.get((from_n, to_n), 0)
                 battery -= cost
                 battery = max(0, battery)
-                plt.text(nodes[to_n]['x'], nodes[to_n]['y'], f"{int(battery)}", fontsize=7, color="red")
+                plt.text(nodes[to_n][0], nodes[to_n][1], f"{int(battery)}", fontsize=7, color="red")
 
     # Mark depot
     plt.scatter(nodes[depot][0], nodes[depot][1], c='black', marker='s', s=150, label='Depot')
@@ -180,21 +189,26 @@ def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS", save
     # Mark charging stations
     if charging_stations:
         for cs in charging_stations:
-            plt.scatter(nodes[cs]['x'], nodes[cs]['y'], c='green', marker='*', s=150)
-            plt.text(nodes[cs]['x'] + 0.5, nodes[cs]['y'] + 0.5, f"CS {cs}", fontsize=8)
+            plt.scatter(nodes[cs][0], nodes[cs][1], c='green', marker='*', s=150)
+            plt.text(nodes[cs][0] + 0.5, nodes[cs][1] + 0.5, f"CS {cs}", fontsize=8)
+
 
     # Mark other nodes
     for n in nodes:
         if n != depot and (charging_stations is None or n not in charging_stations):
             plt.text(nodes[n][0] + 0.3, nodes[n][1] + 0.3, str(n), fontsize=8)
 
-    plt.title(f"EVRP Route Visualization – {method}")
+    title = f"EVRP Route Visualization – {method}"
+    if instance_id:
+        title += f" ({instance_id})"
+    plt.title(title)
+
     plt.legend()
     plt.grid(True)
 
-    if save_plot and instance_name:
+    if save_plot and instance_id:
         os.makedirs("plots", exist_ok=True)
-        filepath = f"plots/{instance_name}_{method}_routes.png"
+        filepath = f"plots/{instance_id}_{method}_routes.png"
         plt.savefig(filepath)
         print(f"[INFO] Plot saved to {filepath}")
         plt.close()

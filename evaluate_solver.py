@@ -60,7 +60,7 @@ for filename in sorted(instance_files):
         "elite_fraction": 0.1,
         "verbose": False
     }
-    ga_routes, ga_stats = run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False)
+    ga_routes, ga_stats = run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=True, instance_id=instance_id)
     ga_stats['instance_id'] = instance_id
     ga_stats['method'] = "GA"
     ga_stats['num_customers'] = len(customers)

@@ -8,6 +8,7 @@ from heuristics import heuristic_population_initialization
 from validation import validate_and_finalize_routes
 from ga_operators import genetic_algorithm, fitness_function
 from local_search import route_cost
+from local_search import plot_routes
 
 def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, instance_id=None):
 
@@ -94,7 +95,7 @@ def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, 
             charging_stations=charging_stations,
             method="CWS" or "GA",
             save_plot=True,
-            instance_name=None,
+            instance_id=None,
             E_max=E_max,
             cost_matrix=cost_matrix
         )
@@ -115,7 +116,8 @@ def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, 
 
 
 
-def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, instance_id=None):
+def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, instance_id=""):
+
 
     """
     Wrapper to run the GA-based EVRP solver and return comparable output for evaluation.
@@ -200,17 +202,33 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
     cs_visits = sum(1 for route in best_routes for n in route if n in charging_stations)
     runtime = round(time.time() - start_time, 2)
 
+    if best_routes and any(len(r) > 1 for r in best_routes):
+        plot_routes(
+            routes=best_routes,
+            nodes=nodes,
+            depot=depot,
+            cost_matrix=cost_matrix,
+            E_max=E_max,
+            save_plot=True,
+            method="GA" or "CWS",
+            instance_id=instance_id,
+            charging_stations=charging_stations
+        )
+
+    else:
+        print("[WARNING] No valid GA routes to plot.")
+
     # Optional: visualize best solution
     if visualize:
-        from local_search import plot_routes
+        print(f"[DEBUG] Plotting GA final solution for {instance_id}")
         plot_routes(
             best_routes,
             nodes=nodes,
             depot=depot,
             charging_stations=charging_stations,
-            method="CWS" or "GA",
+            method="GA" or "CWS",
             save_plot=True,
-            instance_name=None,
+            instance_id=None,
             E_max=E_max,
             cost_matrix=cost_matrix
         )
