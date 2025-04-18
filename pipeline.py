@@ -93,9 +93,9 @@ def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, 
             nodes=nodes,
             depot=depot,
             charging_stations=charging_stations,
-            method="CWS" or "GA",
+            method=method,
             save_plot=True,
-            instance_id=None,
+            instance_id=instance_id,
             E_max=E_max,
             cost_matrix=cost_matrix
         )
@@ -210,7 +210,7 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
             cost_matrix=cost_matrix,
             E_max=E_max,
             save_plot=True,
-            method="GA" or "CWS",
+            method="GA",
             instance_id=instance_id,
             charging_stations=charging_stations
         )
@@ -226,9 +226,9 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
             nodes=nodes,
             depot=depot,
             charging_stations=charging_stations,
-            method="GA" or "CWS",
+            method="GA",
             save_plot=True,
-            instance_id=None,
+            instance_id=instance_id,
             E_max=E_max,
             cost_matrix=cost_matrix
         )
