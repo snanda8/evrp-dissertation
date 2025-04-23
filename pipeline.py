@@ -1,120 +1,107 @@
 from constructive_solver import construct_initial_solution, post_merge_routes
+#from mainscript_constructive import battery_routes
 from utils import make_routes_battery_feasible
 from local_search import apply_local_search, route_cost
-from mainscript_constructive import sanitize_routes
+from route_utils import sanitize_routes
 from evrp_utils import sanitize_routes, filter_overloaded_routes
 import time
 from heuristics import heuristic_population_initialization
 from validation import validate_and_finalize_routes
-from ga_operators import genetic_algorithm, fitness_function
+from ga_operators import genetic_algorithm
+from fitness import fitness_function
 from local_search import route_cost
 from local_search import plot_routes
 from ga_operators import remove_trivial_routes
+from constructive_solver import construct_initial_solution
+from utils import make_routes_battery_feasible
+from local_search import apply_local_search, route_cost, plot_routes
+from heuristics import heuristic_population_initialization
+from validation import validate_and_finalize_routes
+import time
 
-def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False, instance_id=None):
+def run_pipeline(instance_data, penalty_weights, method="CWS", visualize=False):
+    (
+        nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
+        E_max, _, vehicle_capacity, max_travel_time, requests
+    ) = instance_data
 
-    """
-    Runs the EVRP pipeline (construct → repair → local search → evaluate).
-    Supports method='CWS' or 'GA'. Returns final routes and performance stats.
-    """
+    print(f"\n🛠️  Running {method} pipeline...")
 
-    # === Unpack instance data ===
-    (nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
-     E_max, _, vehicle_capacity, max_travel_time, requests) = instance_data
+    # === Step 1: Construct Initial Routes ===
+    initial_routes = construct_initial_solution(
+        nodes=nodes,
+        depot=depot,
+        customers=customers,
+        cost_matrix=cost_matrix,
+        vehicle_capacity=vehicle_capacity,
+        E_max=E_max,
+        requests=requests,
+        charging_stations=charging_stations
+    )
+    print(f"[INFO] Initial constructed routes: {initial_routes}")
 
-    DEPOT = depot
-    recharge_amount = E_max
+    # === Step 2: Make Battery Feasible ===
+    battery_routes = make_routes_battery_feasible(
+        initial_routes,
+        cost_matrix,
+        E_max,
+        charging_stations,
+        depot
+    )
+    print(f"[INFO] After battery repair: {battery_routes}")
 
-    start = time.time()
-
-    # === 1. Construct initial solution ===
-    if method == "CWS":
-        initial_routes = construct_initial_solution(
-            nodes, depot, customers, cost_matrix, vehicle_capacity, E_max, requests, charging_stations
-        )
-    elif method == "GA":
-        raise NotImplementedError("GA pipeline not yet connected. Will be added in next step.")
-    else:
-        raise ValueError(f"Unsupported method: {method}")
-
-    # === 2. Battery repair and merge ===
-    battery_routes = make_routes_battery_feasible(initial_routes, cost_matrix, E_max, charging_stations, depot)
-    battery_routes = post_merge_routes(battery_routes, cost_matrix, vehicle_capacity, E_max, charging_stations, depot, requests)
-    battery_routes = make_routes_battery_feasible(battery_routes, cost_matrix, E_max, charging_stations, depot)
-    battery_routes = sanitize_routes(battery_routes, depot, charging_stations)
-
-    # Remove routes that don’t serve customers
-    battery_routes = [r for r in battery_routes if any(n in customers for n in r)]
-
-    # Final cleanup (remove extra depots)
-    for i in range(len(battery_routes)):
-        while battery_routes[i].count(depot) > 2:
-            battery_routes[i].remove(depot)
-
-    # === 3. Local search ===
+    # === Step 3: Local Search Optimization ===
     optimized_routes = apply_local_search(
         battery_routes,
         cost_matrix=cost_matrix,
         travel_time_matrix=travel_time_matrix,
         E_max=E_max,
         charging_stations=charging_stations,
-        recharge_amount=recharge_amount,
+        recharge_amount=E_max,
         penalty_weights=penalty_weights,
         depot=depot,
         nodes=nodes,
         vehicle_capacity=vehicle_capacity,
         max_travel_time=max_travel_time,
-        requests=requests
+        requests=requests,
+        customers=customers
     )
+    print(f"[INFO] After local search: {optimized_routes}")
 
-    # === 4. Filter and Evaluate ===
-    optimized_routes = filter_overloaded_routes(optimized_routes, vehicle_capacity, requests, depot, charging_stations)
-
-    # Fitness evaluation
-    fitness_score, battery_valid = fitness_function(
+    # === Step 4: Final Battery Repair ===
+    battery_routes = make_routes_battery_feasible(
         optimized_routes,
+        cost_matrix,
+        E_max,
+        charging_stations,
+        depot
+    )
+    print(f"[INFO] Final battery-feasible routes: {battery_routes}")
+
+    # === Step 5: Evaluation ===
+    fitness, battery_feasible = fitness_function(
+        battery_routes,
         cost_matrix,
         travel_time_matrix,
         E_max,
         charging_stations,
-        recharge_amount,
+        E_max,
         penalty_weights,
         depot,
         nodes,
         vehicle_capacity,
         max_travel_time,
-        requests
+        requests,
+        customers
     )
 
-    # Optional visualization
-    if visualize:
-        from local_search import plot_routes
-        plot_routes(
-            optimized_routes,
-            nodes=nodes,
-            depot=depot,
-            charging_stations=charging_stations,
-            method=method,
-            save_plot=True,
-            instance_id=instance_id,
-            E_max=E_max,
-            cost_matrix=cost_matrix
-        )
+    print(f"\n📊 Final Fitness: {fitness:.2f}")
+    print(f"🔋 Battery Feasible: {'✅ Yes' if battery_feasible else '❌ No'}")
 
-    runtime = round(time.time() - start, 2)
-    total_distance = sum(route_cost(r, cost_matrix) for r in optimized_routes if len(r) > 1)
-    cs_count = sum(1 for r in optimized_routes for n in r if n in charging_stations)
-
-    return optimized_routes, {
-        'fitness_score': round(fitness_score, 2),
-        'is_feasible': battery_valid,
-        'num_routes': len(optimized_routes),
-        'total_distance': round(total_distance, 2),
-        'num_CS_visits': cs_count,
-        'runtime_sec': runtime
+    return battery_routes, {
+        "fitness": fitness,
+        "battery_feasible": battery_feasible
     }
-
-
 
 
 def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, instance_id=""):
@@ -134,7 +121,7 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
             penalty_weights,
             method="CWS",
             visualize=False,
-            instance_id=instance_id
+
         )
     except Exception as e:
         print(f"[WARNING] Failed to generate warm-start CWS route: {e}")
@@ -199,7 +186,7 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
 
     # === 4. Fitness Evaluation ===
     fitness_score, battery_valid = fitness_function(
-        best_routes,
+        battery_routes,
         cost_matrix,
         travel_time_matrix,
         E_max,
@@ -217,6 +204,7 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
     cs_visits = sum(1 for route in best_routes for n in route if n in charging_stations)
     runtime = round(time.time() - start_time, 2)
 
+
     if best_routes and any(len(r) > 1 for r in best_routes):
         plot_routes(
             routes=best_routes,
@@ -233,7 +221,9 @@ def run_ga_pipeline(instance_data, penalty_weights, ga_config, visualize=False, 
     else:
         print("[WARNING] No valid GA routes to plot.")
 
+
     # Optional: visualize best solution
+
     if visualize:
         print(f"[DEBUG] Plotting GA final solution for {instance_id}")
         plot_routes(

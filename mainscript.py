@@ -5,7 +5,7 @@ from heuristics import (
     generate_giant_tour_and_split,
     repair_route_battery_feasibility
 )
-from ga_operators import fitness_function, order_crossover_evrp, mutate_route
+from ga_operators import  order_crossover_evrp, mutate_route
 from validation import (
     validate_solution,
     validate_no_duplicates_route,
@@ -15,6 +15,7 @@ from validation import (
 from constructive_solver import construct_initial_solution
 from local_search import apply_local_search, plot_routes, route_cost
 from utils import make_routes_battery_feasible
+from fitness import fitness_function
 
 
 # === CONFIGURATION ===
@@ -98,7 +99,7 @@ print("\n🧪 Fitness of Battery-Aware Routes:")
 total_fitness, is_battery_valid = fitness_function(
     battery_aware_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
     recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
-    max_travel_time, requests
+    max_travel_time, requests, customers
 )
 
 print(f"⚙️  Fitness Score: {total_fitness:.2f}")

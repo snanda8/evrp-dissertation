@@ -55,7 +55,21 @@ def fitness_based_two_opt(route, cost_matrix, travel_time_matrix, full_solution,
     best = route
     best_solution = deepcopy(full_solution)
     best_solution[full_solution.index(route)] = best
-    best_fitness, _ = fitness_function(best_solution, cost_matrix, travel_time_matrix, **fitness_kwargs)
+    best_fitness, _ = fitness_function(
+        best_solution,
+        cost_matrix,
+        travel_time_matrix,
+        fitness_kwargs['E_max'],
+        fitness_kwargs['charging_stations'],
+        fitness_kwargs['recharge_amount'],
+        fitness_kwargs['penalty_weights'],
+        fitness_kwargs['depot'],
+        fitness_kwargs['nodes'],
+        fitness_kwargs['vehicle_capacity'],
+        fitness_kwargs['max_travel_time'],
+        fitness_kwargs['requests'],
+        fitness_kwargs['customers']  #
+    )
 
     improved = True
     while improved:
@@ -65,7 +79,22 @@ def fitness_based_two_opt(route, cost_matrix, travel_time_matrix, full_solution,
                 new_route = best[:i] + best[i:j + 1][::-1] + best[j + 1:]
                 new_solution = deepcopy(full_solution)
                 new_solution[full_solution.index(route)] = new_route
-                new_fitness, _ = fitness_function(new_solution, cost_matrix, travel_time_matrix, **fitness_kwargs)
+                new_fitness, _ = fitness_function(
+                    new_solution,
+                    cost_matrix,
+                    travel_time_matrix,
+                    fitness_kwargs['E_max'],
+                    fitness_kwargs['charging_stations'],
+                    fitness_kwargs['recharge_amount'],
+                    fitness_kwargs['penalty_weights'],
+                    fitness_kwargs['depot'],
+                    fitness_kwargs['nodes'],
+                    fitness_kwargs['vehicle_capacity'],
+                    fitness_kwargs['max_travel_time'],
+                    fitness_kwargs['requests'],
+                    fitness_kwargs['customers']  #
+                )
+
                 if new_fitness < best_fitness:
                     best = new_route
                     best_fitness = new_fitness
@@ -151,9 +180,9 @@ def apply_local_search(solution, cost_matrix, travel_time_matrix, **fitness_kwar
 
 
 # === VISUALIZATION ===
-def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS",
+def plot_routes(routes, nodes, depot, charging_stations=None, method="unknown",
                 cost_matrix=None, E_max=None, show_battery=False,
-                save_plot=False, instance_id=None):
+                save_plot=False, instance_id=None, ):
 
 
 
@@ -209,6 +238,8 @@ def plot_routes(routes, nodes, depot, charging_stations=None, method="CWS",
     if save_plot and instance_id:
         os.makedirs("plots", exist_ok=True)
         filepath = f"plots/{instance_id}_{method}_routes.png"
+        print(f"[PLOT] Saving plot for instance '{instance_id}' using method '{method}'")
+        plt.title(f"Routes - {method} - {instance_id}")
         plt.savefig(filepath)
         print(f"[INFO] Plot saved to {filepath}")
         plt.close()
