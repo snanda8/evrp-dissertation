@@ -63,7 +63,7 @@ def construct_initial_solution(nodes, depot, customers, cost_matrix, vehicle_cap
                     routes[node] = new_route
                 routes[i] = new_route
 
-                # ✅ Recalculate loads
+                #  Recalculate loads
                 for node in new_route:
                     if node != depot:
                         loads[node] = requests[node]['quantity']
