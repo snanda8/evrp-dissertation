@@ -79,13 +79,13 @@ def fitness_function(solution, cost_matrix, travel_time_matrix, E_max, charging_
 
             duplicates = {k: v for k, v in customer_counts.items() if v > 1}
             if duplicates:
-                print(f"❌ HARD INVALIDATION: duplicate customers in route {idx + 1}: {duplicates}")
+                print(f" HARD INVALIDATION: duplicate customers in route {idx + 1}: {duplicates}")
                 return float('inf'), False
 
             print(f"  Route Demand: {route_demand}")
             if route_demand > vehicle_capacity:
                 overload = route_demand - vehicle_capacity
-                print(f"  ⚠️ Capacity overload: {overload}")
+                print(f" ️ Capacity overload: {overload}")
                 # Optional: apply reduced or zero penalty here for debugging
                 # total_penalty += penalty_weights.get('capacity_overload', 1e5) * overload
 

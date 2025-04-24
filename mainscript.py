@@ -1,3 +1,4 @@
+import os
 import random
 from instance_parser import parse_instance
 from heuristics import (
@@ -5,30 +6,25 @@ from heuristics import (
     generate_giant_tour_and_split,
     repair_route_battery_feasibility
 )
-from ga_operators import  order_crossover_evrp, mutate_route
+from ga_operators import order_crossover_evrp, mutate_route
 from validation import (
     validate_solution,
     validate_no_duplicates_route,
     ensure_all_customers_present,
     validate_and_finalize_routes
 )
-from constructive_solver import construct_initial_solution
 from local_search import apply_local_search, plot_routes, route_cost
 from utils import make_routes_battery_feasible
+from route_utils import sanitize_routes
 from fitness import fitness_function
+import matplotlib.pyplot as plt
 
-
-# === CONFIGURATION ===
-instance_file = "instance_files/C101-10.xml"
-
-# === PARSE INSTANCE ===
-(nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
- battery_capacity, num_vehicles_instance, vehicle_capacity, max_travel_time, requests) = parse_instance(instance_file)
-
-DEPOT = depot
-num_vehicles = num_vehicles_instance
-E_max = battery_capacity
-recharge_amount = E_max
+# === CONFIG ===
+INSTANCE_DIR = "instance_files"
+TARGET_INSTANCES = [
+    "C101-10.xml", "C101-5.xml", "C104-10.xml",
+    "R102-10.xml", "RC102-10.xml", "C103-15.xml"
+]
 
 penalty_weights = {
     'missing_customers': 1e6,
@@ -42,101 +38,82 @@ penalty_weights = {
     'vehicle_count': 1e4,
 }
 
-# === CONSTRUCTIVE SOLVER TEST ===
-print("\n\U0001F527 Testing Constructive Initial Solution...\n")
-initial_routes = construct_initial_solution(
-    nodes=nodes,
-    depot=DEPOT,
-    customers=customers,
-    cost_matrix=cost_matrix,
-    vehicle_capacity=vehicle_capacity,
-    E_max=E_max,
-    requests=requests,
-    charging_stations=charging_stations
-)
+# === RUN FOR EACH INSTANCE ===
+for filename in TARGET_INSTANCES:
+    print(f"\n Processing: {filename}")
+    filepath = os.path.join(INSTANCE_DIR, filename)
 
-for i, route in enumerate(initial_routes):
-    print(f"🚚 Vehicle {i+1}: {route}")
+    # === PARSE INSTANCE ===
+    (nodes, charging_stations, depot, customers, cost_matrix, travel_time_matrix,
+     battery_capacity, num_vehicles_instance, vehicle_capacity, max_travel_time, requests) = parse_instance(filepath)
 
-battery_aware_routes = make_routes_battery_feasible(
-    initial_routes, cost_matrix, E_max, charging_stations, DEPOT
-)
+    DEPOT = depot
+    E_max = battery_capacity
+    recharge_amount = E_max
+    num_generations = 30
+    population_size = 10
 
-# Print updated routes
-for i, route in enumerate(battery_aware_routes):
-    print(f"🔋 Battery-Aware Route {i+1}: {route}")
-
-
-# === LOCAL SEARCH IMPROVEMENT ===
-try:
-    optimized_routes = apply_local_search(
-        battery_aware_routes,
-        cost_matrix=cost_matrix,
-        travel_time_matrix=travel_time_matrix,
-        E_max=E_max,
-        charging_stations=charging_stations,
-        recharge_amount=recharge_amount,
-        penalty_weights=penalty_weights,
-        depot=DEPOT,
-        nodes=nodes,
-        vehicle_capacity=vehicle_capacity,
-        max_travel_time=max_travel_time,
-        requests=requests
+    # === INITIAL POPULATION ===
+    print("\n Initializing GA Population...")
+    base_solution = generate_giant_tour_and_split(
+        DEPOT, list(customers), nodes, cost_matrix, travel_time_matrix,
+        requests, vehicle_capacity, max_travel_time, E_max
     )
-except Exception as e:
-    print(f"[ERROR] Local search failed: {e}")
-    optimized_routes = battery_aware_routes
 
-plot_routes(optimized_routes, nodes, DEPOT)
+    repaired_base = [repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount,
+                                                      charging_stations, DEPOT, nodes)
+                     for route in base_solution]
 
-for i, route in enumerate(optimized_routes):
-    print(f"Route {i+1}: {route} — Cost: {route_cost(route, cost_matrix)}")
+    population = [repaired_base]
+    additional_population = heuristic_population_initialization(
+        population_size - 1, nodes, cost_matrix, travel_time_matrix, DEPOT,
+        E_max, recharge_amount, charging_stations, vehicle_capacity,
+        max_travel_time, requests, num_vehicles_instance
+    )
+    population.extend(additional_population)
 
-# === FITNESS EVALUATION ===
-# === FITNESS EVALUATION OF BATTERY-AWARE ROUTES ===
-print("\n🧪 Fitness of Battery-Aware Routes:")
+    # === GA LOOP ===
+    for generation in range(num_generations):
+        print(f"\n Generation {generation+1}...")
+        new_population = []
+        for i in range(population_size // 2):
+            parent1, parent2 = random.sample(population, 2)
+            child = order_crossover_evrp(parent1, parent2, cost_matrix, E_max, charging_stations, recharge_amount, DEPOT)
+            child = mutate_route(child)
+            repaired_child = make_routes_battery_feasible(child, cost_matrix, E_max, charging_stations, DEPOT)
+            repaired_child = sanitize_routes(repaired_child, DEPOT, charging_stations)
+            new_population.append(repaired_child)
 
-total_fitness, is_battery_valid = fitness_function(
-    battery_aware_routes, cost_matrix, travel_time_matrix, E_max, charging_stations,
-    recharge_amount, penalty_weights, DEPOT, nodes, vehicle_capacity,
-    max_travel_time, requests, customers
-)
+        population = sorted(new_population + population, key=lambda sol: fitness_function(
+            sol, cost_matrix, travel_time_matrix, E_max, charging_stations, recharge_amount, penalty_weights,
+            DEPOT, nodes, vehicle_capacity, max_travel_time, requests, customers
+        )[0])[:population_size]
 
-print(f"⚙️  Fitness Score: {total_fitness:.2f}")
-print(f"🔋 Battery Feasible: {'✅ YES' if is_battery_valid else '❌ NO'}")
-print(f"🚚 Vehicles Used: {len(battery_aware_routes)}")
+    # === BEST SOLUTION ===
+    best_solution = population[0]
+    final_fitness, battery_ok = fitness_function(
+        best_solution, cost_matrix, travel_time_matrix, E_max, charging_stations, recharge_amount,
+        penalty_weights, DEPOT, nodes, vehicle_capacity, max_travel_time, requests, customers
+    )
 
-total_distance = sum(route_cost(route, cost_matrix) for route in battery_aware_routes)
-print(f"📏 Total Distance: {total_distance:.2f}")
+    print(f"\n📊 Final Evaluation for {filename}:")
+    print(f"  ➤ Total Routes: {len(best_solution)}")
+    print(f"  ➤ Fitness Score: {final_fitness:.2f}")
+    print(f"  ➤ Battery Feasible: {' YES' if battery_ok else ' NO'}")
 
+    for i, route in enumerate(best_solution):
+        print(f"     Route {i+1}: {route} (Cost: {route_cost(route, cost_matrix)})")
 
-# === GA COMPONENTS  ===
-giant_solution = generate_giant_tour_and_split(
-    DEPOT, list(customers), nodes, cost_matrix, travel_time_matrix,
-    requests, vehicle_capacity, max_travel_time, E_max
-)
-
-repaired_solution = [repair_route_battery_feasibility(route, cost_matrix, E_max, recharge_amount,
-                                                      charging_stations, DEPOT, nodes) for route in giant_solution]
-
-population_size = 10
-population = [repaired_solution]
-additional_population = heuristic_population_initialization(
-    population_size, nodes, cost_matrix, travel_time_matrix, DEPOT,
-    E_max, recharge_amount, charging_stations, vehicle_capacity,
-    max_travel_time, requests, num_vehicles
-)
-population.extend(additional_population)
-
-# === DEBUG VALIDATION ===
-assigned_customers = {node for route in giant_solution for node in route if node in customers}
-missing_customers = customers - assigned_customers
-print(f"Assigned Customers: {assigned_customers}")
-if missing_customers:
-    print(f"ERROR: Missing Customers in Initial Routes: {missing_customers}")
-
-overlap = customers.intersection(charging_stations)
-if overlap:
-    print(f" [DEBUG] ERROR: Charging stations are incorrectly in the customers list: {overlap}")
-
-
+    instance_id = filename.replace(".xml", "")
+    plot_routes(
+        best_solution,
+        nodes=nodes,
+        depot=depot,
+        charging_stations=charging_stations,
+        cost_matrix=cost_matrix,
+        E_max=E_max,
+        save_plot=False,
+        method="GA",
+        instance_id=instance_id
+    )
+    plt.show(block=True)
