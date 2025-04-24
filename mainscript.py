@@ -1,4 +1,5 @@
 import os
+import csv
 import random
 from instance_parser import parse_instance
 from heuristics import (
@@ -21,6 +22,7 @@ import matplotlib.pyplot as plt
 
 # === CONFIG ===
 INSTANCE_DIR = "instance_files"
+RESULTS_FILE = "evaluation_results.csv"
 TARGET_INSTANCES = [
     "C101-10.xml", "C101-5.xml", "C104-10.xml",
     "R102-10.xml", "RC102-10.xml", "C103-15.xml"
@@ -38,9 +40,25 @@ penalty_weights = {
     'vehicle_count': 1e4,
 }
 
+def save_result_to_csv(instance_name, method, fitness, battery_feasible, route_count, vehicle_count, comment=""):
+    file_exists = os.path.isfile(RESULTS_FILE)
+    with open(RESULTS_FILE, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            writer.writerow(["Instance", "Method", "Fitness", "Battery Feasible", "Route Count", "Vehicle Count", "Comments"])
+        writer.writerow([
+            instance_name,
+            method,
+            f"{fitness:.2f}",
+            "YES" if battery_feasible else "NO",
+            route_count,
+            vehicle_count,
+            comment
+        ])
+
 # === RUN FOR EACH INSTANCE ===
 for filename in TARGET_INSTANCES:
-    print(f"\n Processing: {filename}")
+    print(f"\nProcessing: {filename}")
     filepath = os.path.join(INSTANCE_DIR, filename)
 
     # === PARSE INSTANCE ===
@@ -54,7 +72,7 @@ for filename in TARGET_INSTANCES:
     population_size = 10
 
     # === INITIAL POPULATION ===
-    print("\n Initializing GA Population...")
+    print("\nInitializing GA Population...")
     base_solution = generate_giant_tour_and_split(
         DEPOT, list(customers), nodes, cost_matrix, travel_time_matrix,
         requests, vehicle_capacity, max_travel_time, E_max
@@ -74,7 +92,7 @@ for filename in TARGET_INSTANCES:
 
     # === GA LOOP ===
     for generation in range(num_generations):
-        print(f"\n Generation {generation+1}...")
+        print(f"\nGeneration {generation+1}...")
         new_population = []
         for i in range(population_size // 2):
             parent1, parent2 = random.sample(population, 2)
@@ -96,13 +114,13 @@ for filename in TARGET_INSTANCES:
         penalty_weights, DEPOT, nodes, vehicle_capacity, max_travel_time, requests, customers
     )
 
-    print(f"\n📊 Final Evaluation for {filename}:")
-    print(f"  ➤ Total Routes: {len(best_solution)}")
-    print(f"  ➤ Fitness Score: {final_fitness:.2f}")
-    print(f"  ➤ Battery Feasible: {' YES' if battery_ok else ' NO'}")
+    print(f"\nFinal Evaluation for {filename}:")
+    print(f"  Total Routes: {len(best_solution)}")
+    print(f"  Fitness Score: {final_fitness:.2f}")
+    print(f"  Battery Feasible: {'YES' if battery_ok else 'NO'}")
 
     for i, route in enumerate(best_solution):
-        print(f"     Route {i+1}: {route} (Cost: {route_cost(route, cost_matrix)})")
+        print(f"    Route {i+1}: {route} (Cost: {route_cost(route, cost_matrix)})")
 
     instance_id = filename.replace(".xml", "")
     plot_routes(
@@ -117,3 +135,13 @@ for filename in TARGET_INSTANCES:
         instance_id=instance_id
     )
     plt.show(block=True)
+
+    save_result_to_csv(
+        instance_name=filename,
+        method="GA",
+        fitness=final_fitness,
+        battery_feasible=battery_ok,
+        route_count=len(best_solution),
+        vehicle_count=len(best_solution),
+        comment="GA result from mainscript.py"
+    )

@@ -1,4 +1,13 @@
-fitness,battery_feasible,instance_id,method,num_customers
-5010603.0,False,C101-10,CWS,10
-5000000.0,False,C101-5,CWS,5
-3010030.0,False,C103-5,CWS,5
+Instance,Method,Fitness,Battery Feasible,Route Count,Vehicle Count,Comments
+C101-10.xml,CWS,21578,YES,2,2,CWS result from mainscript_constructive.py
+C101-5.xml,CWS,10980,YES,1,1,CWS result from mainscript_constructive.py
+C104-10.xml,CWS,11538,YES,1,1,CWS result from mainscript_constructive.py
+R102-10.xml,CWS,21541,YES,2,2,CWS result from mainscript_constructive.py
+RC102-10.xml,CWS,31634,NO,2,2,CWS result from mainscript_constructive.py
+C103-15.xml,CWS,11816,YES,1,1,CWS result from mainscript_constructive.py
+C101-10.xml,GA,41779,NO,2,2,GA result from mainscript.py
+C101-5.xml,GA,30999,NO,2,2,GA result from mainscript.py
+C104-10.xml,GA,31382,NO,2,2,GA result from mainscript.py
+R102-10.xml,GA,41276,NO,3,3,GA result from mainscript.py
+RC102-10.xml,GA,51437,NO,3,3,GA result from mainscript.py
+C103-15.xml,GA,41788,NO,2,2,GA result from mainscript.py

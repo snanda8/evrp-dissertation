@@ -1,4 +1,5 @@
 import os
+import csv
 from instance_parser import parse_instance
 from constructive_solver import construct_initial_solution, post_merge_routes
 from utils import make_routes_battery_feasible
@@ -8,6 +9,7 @@ import matplotlib.pyplot as plt
 
 # === CONFIG ===
 INSTANCE_DIR = "instance_files"
+RESULTS_FILE = "evaluation_results.csv"
 TARGET_INSTANCES = ["C101-10.xml", "C101-5.xml", "C104-10.xml", "R102-10.xml", "RC102-10.xml", "C103-15.xml"]
 penalty_weights = {
     'missing_customers': 1e6,
@@ -21,9 +23,25 @@ penalty_weights = {
     'vehicle_count': 1e4,
 }
 
+def save_result_to_csv(instance_name, method, fitness, battery_feasible, route_count, vehicle_count, comment=""):
+    file_exists = os.path.isfile(RESULTS_FILE)
+    with open(RESULTS_FILE, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            writer.writerow(["Instance", "Method", "Fitness", "Battery Feasible", "Route Count", "Vehicle Count", "Comments"])
+        writer.writerow([
+            instance_name,
+            method,
+            f"{fitness:.2f}",
+            "YES" if battery_feasible else "NO",
+            route_count,
+            vehicle_count,
+            comment
+        ])
+
 # === RUN FOR EACH INSTANCE ===
 for filename in TARGET_INSTANCES:
-    print(f"\n🔍 Processing: {filename}")
+    print(f"\nProcessing: {filename}")
     filepath = os.path.join(INSTANCE_DIR, filename)
 
     # === Parse ===
@@ -90,13 +108,13 @@ for filename in TARGET_INSTANCES:
         requests, customers
     )
 
-    print(f"\n📊 Final Evaluation for {filename}:")
-    print(f"  ➤ Total Routes: {len(optimized_routes)}")
-    print(f"  ➤ Fitness Score: {fitness}")
-    print(f"  ➤ Battery Feasible: {'✅ YES' if battery_ok else '❌ NO'}")
+    print(f"\nFinal Evaluation for {filename}:")
+    print(f"  Total Routes: {len(optimized_routes)}")
+    print(f"  Fitness Score: {fitness}")
+    print(f"  Battery Feasible: {'YES' if battery_ok else 'NO'}")
 
     for i, route in enumerate(optimized_routes):
-        print(f"    ✅ Route {i+1}: {route} (Cost: {route_cost(route, cost_matrix)})")
+        print(f"    Route {i+1}: {route} (Cost: {route_cost(route, cost_matrix)})")
 
     # Use filename as instance_id
     instance_id = filename.replace(".xml", "")
@@ -116,4 +134,12 @@ for filename in TARGET_INSTANCES:
     # Ensure plot stays open until manually closed
     plt.show(block=True)
 
-
+    save_result_to_csv(
+        instance_name=filename,
+        method="CWS",
+        fitness=fitness,
+        battery_feasible=battery_ok,
+        route_count=len(optimized_routes),
+        vehicle_count=len(optimized_routes),
+        comment="CWS result from mainscript_constructive.py"
+    )
