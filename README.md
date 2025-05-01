@@ -45,8 +45,8 @@ EVRP-Solver/
 ├── evrp_utils.py                   # Additional battery feasibility helpers
 ├── instance_files/                 # Folder containing problem instance XML files
 ├── plots/                          # Auto-generated visualizations of routes
-├── evaluation_results.csv          # Generated output metrics for all runs
-└── requirements.txt                # [To be generated if not already present]
+└── evaluation_results.csv          # Generated output metrics for all runs
+
 ```
 
 ---
