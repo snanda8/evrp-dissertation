@@ -1,5 +1,8 @@
 # Intelligent Methods for the Electric Vehicle Routing Problem (EVRP)
 
+> A final-year university dissertation project that implements and compares heuristic and metaheuristic approaches to the Electric Vehicle Routing Problem (EVRP), with a focus on real-world feasibility constraints.
+
+
 ## Project Overview
 
 This project investigates intelligent solution methods for the Electric Vehicle Routing Problem (EVRP), accounting for real-world constraints such as limited battery capacity, charging infrastructure, and vehicle load limits.
@@ -12,10 +15,10 @@ Both approaches are supported by local search optimization, dynamic battery cons
 
 ---
 
-## Features
+## Key Features
 
 - Modified Clarke and Wright heuristic supporting energy-based route feasibility
-- Genetic Algorithm with crossover, mutation, and population repair (experimental)
+- Genetic Algorithm with crossover, mutation, and population repair 
 - Comprehensive battery feasibility enforcement, including dynamic recharging station insertion
 - Local search with 2-opt, relocate, and swap operators for route improvement
 - Automatic multi-instance evaluation and result aggregation
@@ -30,7 +33,7 @@ Both approaches are supported by local search optimization, dynamic battery cons
 EVRP-Solver/
 ├── constructive_solver.py        # Clarke & Wright constructive solution builder
 ├── mainscript_constructive.py     # Main script to run CWS experiments
-├── mainscript.py                  # Main script to run GA experiments (experimental)
+├── mainscript.py                  # Main script to run GA experiments 
 ├── evaluate_solver.py             # Batch evaluation script for both CWS and GA
 ├── pipeline.py                    # Pipelines to orchestrate solving and evaluation
 ├── fitness.py                     # Fitness evaluation, penalties, feasibility scoring
@@ -82,7 +85,7 @@ This will:
 - Save evaluation metrics into `evaluation_results.csv`,
 - Generate visual route plots under `plots/`.
 
-### Genetic Algorithm (Experimental)
+### Genetic Algorithm 
 
 The Genetic Algorithm approach can be run via:
 
@@ -98,7 +101,7 @@ python mainscript.py
 
 ## Evaluation and Results
 
-All experiments append evaluation outputs to `evaluation_results.csv`, including:
+Each run appends results to `evaluation_results.csv`, including:
 - Instance Name
 - Solving Method (CWS or GA)
 - Fitness Score
@@ -106,11 +109,6 @@ All experiments append evaluation outputs to `evaluation_results.csv`, including
 - Number of Routes
 - Number of Vehicles Used
 - Comments (e.g., whether GA results were feasible)
-
-Route plots are saved in the `plots/` directory, illustrating customer, depot, and charging station connections. 
-If you wish to see each route graph that is generated per instance upon running either mainscript.py or mainscript_constructive.py, then set save_plot to False in either of the plot_routes function calls in mainscript.py or mainscript_constructive.py
-
-
 
 ---
 
@@ -122,18 +120,10 @@ If you wish to see each route graph that is generated per instance upon running 
 
 ---
 
-## Project Details
 
-- **Title:** Intelligent Methods for the Electric Vehicle Routing Problem
-- **Student Name:** Sarthak Shalin Nanda
-- **University:** University of Leicester
+###  Author
 
-
----
-
-## References
-
-Key algorithms, heuristics, and methodology sources are referenced within the accompanying dissertation and cited appropriately according to university guidelines.
+Developed by [Sarthak Shalin Nanda](mailto:sarthaknanda0@gmail.com)  
+As part of the CO3201 Computer Science Project – University of Leicester (2025)
 
 ---
-
