@@ -23,10 +23,7 @@ import matplotlib.pyplot as plt
 # === CONFIG ===
 INSTANCE_DIR = "instance_files"
 RESULTS_FILE = "evaluation_results.csv"
-TARGET_INSTANCES = [
-    "C103-5.xml", "C101-10.xml", "C101-5.xml", "C104-10.xml",
-    "R102-10.xml", "RC102-10.xml", "C103-15.xml", "RC201-10.xml"
-]
+TARGET_INSTANCES = ["C101-10.xml",  "R102-10.xml", "RC102-10.xml"]
 
 penalty_weights = {
     'missing_customers': 1e6,
@@ -130,7 +127,7 @@ for filename in TARGET_INSTANCES:
         charging_stations=charging_stations,
         cost_matrix=cost_matrix,
         E_max=E_max,
-        save_plot=True,
+        save_plot=False,
         method="GA",
         instance_id=instance_id
     )

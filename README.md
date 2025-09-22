@@ -98,7 +98,7 @@ python mainscript.py
 
 ## Evaluation and Results
 
-All experiments write evaluation outputs to `evaluation_results.csv`, including:
+All experiments append evaluation outputs to `evaluation_results.csv`, including:
 - Instance Name
 - Solving Method (CWS or GA)
 - Fitness Score
@@ -126,9 +126,7 @@ If you wish to see each route graph that is generated per instance upon running 
 
 - **Title:** Intelligent Methods for the Electric Vehicle Routing Problem
 - **Student Name:** Sarthak Shalin Nanda
-- **Student ID:** 229007926
 - **University:** University of Leicester
-- **Module:** CO3201 Computer Science Project
 
 
 ---
@@ -139,6 +137,3 @@ Key algorithms, heuristics, and methodology sources are referenced within the ac
 
 ---
 
-## Academic Integrity Statement
-
-All work was independently produced according to the University's regulations on academic integrity. External resources have been fully acknowledged and cited.
